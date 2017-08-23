@@ -1,5 +1,6 @@
 from __future__ import division
 import sys
+import threading
 import bioformats
 import javabridge
 import numpy as np
@@ -17,6 +18,9 @@ import modest_image
 
 # Patch np.fft to use pyfftw so skimage utilities can benefit.
 np.fft = pyfftw.interfaces.numpy_fft
+
+
+_bioformats_lock = threading.Lock()
 
 
 def _init_bioformats():
@@ -100,7 +104,8 @@ class Reader(object):
         self.ir = bioformats.ImageReader(self.path)
 
     def read(self, series, c):
-        return self.ir.read(c=c, series=series, rescale=False)
+        with _bioformats_lock:
+            return self.ir.read(c=c, series=series, rescale=False)
 
 
 # TileStatistics = collections.namedtuple(
@@ -297,15 +302,16 @@ class LayerAligner(object):
 
     def register_all(self):
         n = self.metadata.num_images
-        self.shifts = np.empty((n, 2))
-        for i in range(n):
-            if self.verbose:
-                sys.stdout.write("\r    aligning tile %d/%d" % (i + 1, n))
-                sys.stdout.flush()
-            shift, error = self.register(i)
-            self.shifts[i] = shift
-        if self.verbose:
-            print
+        self.shifts = np.zeros((n, 2))
+        # def doit(i):
+        #     if self.verbose:
+        #         sys.stdout.write("    aligning tile %d/%d\n" % (i + 1, n))
+        #         sys.stdout.flush()
+        #     shift, error = self.register(i)
+        #     self.shifts[i] = shift
+        pool = ThreadPool(8)
+        self.shifts[:] = pool.map(self.register, [[i] for i in range(n)])
+        pool.close()
 
     def calculate_positions(self):
         self.positions = self.reference_aligner.positions + self.shifts
@@ -313,6 +319,7 @@ class LayerAligner(object):
 
     def register(self, t):
         """Return relative shift between images and the alignment error."""
+        raise ValueError("foo")
         ref_img, img = self.overlap(t)
         ref_img_f = fft2(whiten(ref_img))
         img_f = fft2(whiten(img))
@@ -374,6 +381,77 @@ class LayerAligner(object):
         shift += origin
         plt.plot(shift[1], shift[0], 'rx')
         plt.tight_layout(0, 0, 0)
+
+
+plock = threading.Lock()
+def lprint(*args):
+    with plock:
+        print ' '.join(str(x) for x in args)
+
+class Worker(threading.Thread):
+    """ Thread executing tasks from a given tasks queue """
+
+    def __init__(self, tasks, returns):
+        threading.Thread.__init__(self)
+        self.tasks = tasks
+        self.returns = returns
+        self.daemon = True
+        self.start()
+
+    def run(self):
+        print "attaching", self.ident
+        javabridge.attach()
+        while True:
+            i, func, args, kargs = self.tasks.get()
+            print "got", i, func
+            if func == 'exit':
+                print 'exit from', self.ident
+                javabridge.detach()
+                print "detached", self.ident
+                return
+            ret = exc_info = None
+            try:
+                ret = func(*args, **kargs)
+            except Exception:
+                exc_info = sys.exc_info()
+            finally:
+                print "cleaning up", i, '('+str(self.tasks.qsize())+')'
+                self.returns.put((i, ret, exc_info))
+                # Mark this task as done, whether an exception happened or not
+                self.tasks.task_done()
+
+
+class ThreadPool:
+    """ Pool of threads consuming tasks from a queue """
+
+    def __init__(self, num_threads):
+        self.num_threads = num_threads
+        self.tasks = queue.Queue(num_threads)
+        self.returns = queue.Queue(num_threads)
+        for _ in range(num_threads):
+            Worker(self.tasks, self.returns)
+
+    def map(self, func, args_list):
+        """ Add a list of tasks to the queue """
+        n_tasks = len(args_list)
+        for i, args in enumerate(args_list):
+            self.tasks.put((i, func, args, {}))
+        ret_list = [None] * n_tasks
+        for _ in range(n_tasks):
+            i, ret, exc_info = self.returns.get()
+            print ">>> returned", i
+            if exc_info:
+                self.close()
+                _, value, tb = exc_info
+                raise value, None, tb
+            ret_list[i] = ret
+        self.tasks.join()
+        return ret_list
+
+    def close(self):
+        for _ in range(self.num_threads):
+            print "closing", _, '('+str(self.tasks.qsize())+')'
+            self.tasks.put((None, 'exit', None, None))
 
 
 def fft2(img):
