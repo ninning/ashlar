@@ -1,6 +1,7 @@
 from __future__ import division, print_function
 import sys
 import warnings
+import re
 import xml.etree.ElementTree
 try:
     import pathlib
@@ -241,6 +242,89 @@ class BioformatsReader(Reader):
         shape = self.metadata.tile_size(series)
         img = np.frombuffer(byte_array.tostring(), dtype=dtype).reshape(shape)
         return img
+
+
+class LooseFilesMetadata(Metadata):
+
+    def __init__(self, path, pattern, skip_images=None):
+        self.path = pathlib.Path(path)
+        self.pattern = pattern
+        if not skip_images:
+            skip_images = []
+        self.skip_images = skip_images
+        self._enumerate_tiles()
+
+    def _enumerate_tiles(self):
+        regex = re.sub(r'{([^:}]+)(?:[^}]*)}', r'(?P<\1>.*?)',
+                       self.pattern.replace('.', '\.'))
+        n = 0
+        channels = set()
+        indexes = set()
+        for p in self.path.iterdir():
+            match = re.match(regex, p.name)
+            if match:
+                gd = match.groupdict()
+                channels.add(gd['channel'])
+                indexes.add(int(gd['index']))
+                n += 1
+        expected_n = len(channels) * len(indexes)
+        if n != expected_n:
+            raise Exception(
+                "Expected %d files (%d channels * %d indexes), but found %d"
+                % (expected_n, len(channels), len(indexes), n)
+            )
+        self._indexes = [
+            x for i, x in enumerate(sorted(indexes))
+            if i not in self.skip_images
+        ]
+        self._channels = sorted(channels)
+        metadata = self.get_metadata(0, 0)
+        self._pixel_size = metadata.pixel_size
+        self._pixel_dtype = metadata.pixel_dtype
+
+    def get_path(self, channel, index):
+        filename = self.pattern.format(
+            channel=self._channels[channel], index=self._indexes[index]
+        )
+        return self.path / filename
+
+    def get_metadata(self, channel, index):
+        path = self.get_path(channel, index)
+        return BioformatsMetadata(str(path))
+
+    @property
+    def num_images(self):
+        return len(self._indexes)
+
+    @property
+    def num_channels(self):
+        return len(self._channels)
+
+    @property
+    def pixel_size(self):
+        return self._pixel_size
+
+    @property
+    def pixel_dtype(self):
+        return self._pixel_dtype
+
+    def tile_position(self, i):
+        metadata = self.get_metadata(0, i)
+        return metadata.tile_position(0) * [-1, 1]
+
+    def tile_size(self, i):
+        metadata = self.get_metadata(0, i)
+        return metadata.tile_size(0)
+
+
+class LooseFilesReader(Reader):
+
+    def __init__(self, path, pattern, skip_images=None):
+        self.metadata = LooseFilesMetadata(path, pattern, skip_images)
+
+    def read(self, series, c):
+        reader = BioformatsReader(str(self.metadata.get_path(c, series)))
+        return reader.read(0, 0)
 
 
 # TileStatistics = collections.namedtuple(
