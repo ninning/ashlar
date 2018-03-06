@@ -1,26 +1,31 @@
+import cPickle as pickle
 import numpy as np
+import matplotlib.pyplot as plt
+import modest_image
 from ashlar import reg
 
 reader1 = reg.LooseFilesReader(
     path='input/mmo_test/Original/',
     pattern='Scan 20x obj 25_w{channel}_s{index}_t1.TIF',
-    skip_images=[64]
+    skip_images=(range(0,64,8) +  range(1,64,8) + [64])
 )
 reader2 = reg.LooseFilesReader(
     path='input/mmo_test/Rescanned/',
     pattern='25_w{channel}_s{index}_t1.TIF',
-    skip_images=[56]
+    skip_images=(range(6,56,7) + [56])
 )
 
 aligner1 = reg.EdgeAligner(reader1, verbose=True)
 aligner1.run()
 
-mosaic1 = reg.Mosaic(aligner1, aligner1.mosaic_shape, '', channels=[0], verbose=True)
-(img1,) = mosaic1.run(mode='return')
-
-aligner2 = reg.EdgeAligner(reader2, verbose=True)
+shift = (reader2.metadata.positions - reader1.metadata.positions).mean(axis=0)
+reader2.metadata._positions -= shift
+aligner2 = reg.LayerAligner(reader2, aligner1, verbose=True)
 aligner2.run()
 
-mosaic2 = reg.Mosaic(aligner2, aligner2.mosaic_shape, '', channels=[0], verbose=True)
-(img2,) = mosaic2.run(mode='return')
-
+mosaic1 = reg.Mosaic(aligner1, aligner1.mosaic_shape, 'jt1.tif',
+                     channels=[0], verbose=True)
+mosaic1.run()
+mosaic2 = reg.Mosaic(aligner2, aligner1.mosaic_shape, 'jt2.tif',
+                     channels=[0], verbose=True)
+mosaic2.run()
