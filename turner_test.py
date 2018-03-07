@@ -1,4 +1,3 @@
-import cPickle as pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import modest_image
@@ -23,9 +22,13 @@ reader2.metadata._positions -= shift
 aligner2 = reg.LayerAligner(reader2, aligner1, verbose=True)
 aligner2.run()
 
-mosaic1 = reg.Mosaic(aligner1, aligner1.mosaic_shape, 'jt1.tif',
-                     channels=[0], verbose=True)
+mosaic1 = reg.Mosaic(
+    aligner1, aligner1.mosaic_shape, 'output/mmo_test/1_original_{channel}.tif',
+    verbose=True
+)
 mosaic1.run()
-mosaic2 = reg.Mosaic(aligner2, aligner1.mosaic_shape, 'jt2.tif',
-                     channels=[0], verbose=True)
+mosaic2 = reg.Mosaic(
+    aligner2, aligner1.mosaic_shape, 'output/mmo_test/2_rescanned_{channel}.tif',
+    verbose=True
+)
 mosaic2.run()
