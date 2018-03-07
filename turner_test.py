@@ -14,7 +14,7 @@ reader2 = reg.LooseFilesReader(
     skip_images=(range(6,56,7) + [56])
 )
 
-aligner1 = reg.EdgeAligner(reader1, verbose=True)
+aligner1 = reg.EdgeAligner(reader1, channel=2, verbose=True)
 aligner1.run()
 
 shift = (reader2.metadata.positions - reader1.metadata.positions).mean(axis=0)

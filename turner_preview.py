@@ -29,7 +29,7 @@ for r in (reader1, reader2):
     for i in range(total):
         sys.stdout.write("\rLoading %d/%d" % (i + 1, total))
         sys.stdout.flush()
-        reg.paste(mosaic, r.read(c=0, series=i), positions[i])
+        reg.paste(mosaic, r.read(c=2, series=i), positions[i])
     print()
 
     plt.figure()
@@ -37,4 +37,4 @@ for r in (reader1, reader2):
 
     modest_image.imshow(ax, mosaic)
 
-    plt.show()
+plt.show()
