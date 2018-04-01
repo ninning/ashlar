@@ -402,6 +402,9 @@ class EdgeAligner(object):
         shift, error, _ = skimage.feature.register_translation(
             img1_f, img2_f, 10, 'fourier'
         )
+        # Log-transform the error value to improve its suitability as a distance
+        # metric for the Dijkstra path calculation.
+        error = -np.log(np.sqrt(1 - error ** 2))
         # Account for padding, flipping the sign depending on the direction
         # between the tiles.
         p1, p2 = self.metadata.positions[[t1, t2]]
