@@ -650,7 +650,8 @@ class LayerAligner(object):
     def overlap(self, t):
         its = self.intersection(t)
         ref_t = self.reference_idx[t]
-        img1 = self.reference_aligner.reader.read(series=ref_t, c=0)
+        ref_channel = self.reference_aligner.channel
+        img1 = self.reference_aligner.reader.read(series=ref_t, c=ref_channel)
         img2 = self.reader.read(series=t, c=self.channel)
         ov1 = crop(img1, its.offsets[0], its.shape)
         ov2 = crop(img2, its.offsets[1], its.shape)
