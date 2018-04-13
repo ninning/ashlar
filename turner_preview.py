@@ -5,16 +5,8 @@ import matplotlib.pyplot as plt
 import modest_image
 from ashlar import reg
 
-reader1 = reg.LooseFilesReader(
-    path='input/mmo_test/Original/',
-    pattern='Scan 20x obj 25_w{channel}_s{index}_t1.TIF',
-    skip_images=[64]
-)
-reader2 = reg.LooseFilesReader(
-    path='input/mmo_test/Rescanned/',
-    pattern='25_w{channel}_s{index}_t1.TIF',
-    skip_images=[56]
-)
+reader1 = reg.BioformatsReader('input/mmo_test/Original/Scan 20x obj 25.nd')
+reader2 = reg.BioformatsReader('input/mmo_test/Rescanned/25.nd')
 
 for r in (reader1, reader2):
 
