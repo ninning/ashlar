@@ -684,6 +684,7 @@ class LayerAligner(object):
         plt.plot(origin[1], origin[0], 'r+')
         shift += origin - its.offsets[0]
         plt.plot(shift[1], shift[0], 'rx')
+        plt.colorbar()
         plt.tight_layout(0, 0, 0)
 
 
