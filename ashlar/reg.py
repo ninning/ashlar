@@ -599,14 +599,15 @@ class LayerAligner(object):
             print()
 
     def calculate_positions(self):
-        self.positions = self.reference_aligner.positions + self.shifts
+        base_positions = self.reference_aligner.positions[self.reference_idx]
+        self.positions = base_positions + self.shifts
         self.constrain_positions()
         self.centers = self.positions + self.metadata.size / 2
 
     def constrain_positions(self):
         # Computed shifts of exactly 0,0 seem to result from failed
         # registration. We need to throw those out for this purpose.
-        discard = (self.shifts == 0).all(axis=1)
+        discard = (self.shifts == 0).all(axis=1) | np.isinf(self.errors)
         # Take the median of registered shifts to determine the offset
         # (translation) from the reference image to this one.
         offset = np.nan_to_num(np.median(self.shifts[~discard], axis=0))
@@ -615,18 +616,20 @@ class LayerAligner(object):
         predictions = self.reference_aligner.lr.predict(self.metadata.positions)
         # Discard any tile registration that's too far from the linear model,
         # replacing it with the relevant model prediction.
-        distance = np.linalg.norm(self.positions - predictions - offset, axis=1)
+        distance = np.linalg.norm(self.positions - predictions, axis=1)
         max_dist = self.max_shift_pixels
         extremes = distance > max_dist
         # Recalculate the mean shift, also ignoring the extreme values.
         discard |= extremes
         self.offset = np.nan_to_num(np.mean(self.shifts[~discard], axis=0))
         # Fill in discarded shifts from the predictions.
-        self.positions[discard] = predictions[discard] + self.offset
+        self.positions[discard] = predictions[discard]
 
     def register(self, t):
         """Return relative shift between images and the alignment error."""
         its, ref_img, img = self.overlap(t)
+        if any(its.shape == 0):
+            return np.array([np.inf, np.inf]), np.inf
         ref_img_f = fft2(whiten(ref_img))
         img_f = fft2(whiten(img))
         shift, error, _ = skimage.feature.register_translation(
@@ -906,6 +909,8 @@ def paste(target, img, pos, func=None):
     # application have far more overlap than a single pixel, it's irrelevant.
     target_slice = target[yi:yi+img.shape[0], xi:xi+img.shape[1]]
     img = crop_like(img, target_slice)
+    if img.size == 0:
+        return
     if img.ndim == 2:
         img = scipy.ndimage.shift(img, pos_f)
     else:
