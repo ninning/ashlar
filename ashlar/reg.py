@@ -104,7 +104,7 @@ class Metadata(object):
             if any(any(self.tile_size(i) != s0) for i in image_ids):
                 raise ValueError("Image series must all have the same dimensions")
             self._size = s0
-        return self._size
+        return self._size - [7, 0]
 
     @property
     def centers(self):
@@ -241,6 +241,7 @@ class BioformatsReader(Reader):
         dtype = self.metadata.pixel_dtype
         shape = self.metadata.tile_size(series)
         img = np.frombuffer(byte_array.tostring(), dtype=dtype).reshape(shape)
+        img = img[:-7, :]
         return img
 
 
@@ -486,6 +487,7 @@ class EdgeAligner(object):
         shift, error, _ = skimage.feature.register_translation(
             img1_f, img2_f, 10, 'fourier'
         )
+        error = -np.log(np.sqrt(1 - error ** 2))
         # Account for padding, flipping the sign depending on the direction
         # between the tiles.
         p1, p2 = self.metadata.positions[[t1, t2]]
