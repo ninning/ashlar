@@ -23,9 +23,12 @@ CMD = ("ffmpeg -v error -r 5 -y -i " + FORMAT + " -an"
 
 
 def main(argv=sys.argv):
-    # Sort paths by cycle number, numerically.
-    paths = sorted(glob.glob('cycle_*_channel_0.tif'),
-                   key=lambda s: int(s.split('_')[1]))
+    if len(argv) == 1:
+        paths = glob.glob('cycle_*_channel_0.tif')
+        # Sort paths by cycle number, numerically.
+        paths = sorted(paths, key=lambda s: int(s.split('_')[1]))
+    else:
+        paths = argv[1:]
     for i, in_path in enumerate(paths):
         out_path = FORMAT % i
         print('%s -> %s' % (in_path, out_path))
