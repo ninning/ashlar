@@ -26,6 +26,7 @@ try:
     import modest_image
 except ImportError:
     modest_image = None
+from ashlar.transform import polar2cart
 
 # Patch np.fft to use pyfftw so skimage utilities can benefit.
 np.fft = pyfftw.interfaces.numpy_fft
@@ -589,13 +590,15 @@ class LayerAligner(object):
     def register_all(self):
         n = self.metadata.num_images
         self.shifts = np.empty((n, 2))
+        self.angles = np.empty(n)
         self.errors = np.empty(n)
         for i in range(n):
             if self.verbose:
                 sys.stdout.write("\r    aligning tile %d/%d" % (i + 1, n))
                 sys.stdout.flush()
-            shift, error = self.register(i)
+            shift, angle, error = self.register(i)
             self.shifts[i] = shift
+            self.angles[i] = angle
             self.errors[i] = error
         if self.verbose:
             print()
@@ -628,18 +631,30 @@ class LayerAligner(object):
         self.positions[discard] = predictions[discard]
 
     def register(self, t):
-        """Return relative shift between images and the alignment error."""
+        """Return relative shift/angle between images and alignment error."""
         its, ref_img, img = self.overlap(t)
         if any(its.shape == 0):
             return np.array([np.inf, np.inf]), np.inf
-        ref_img_f = fft2(whiten(ref_img))
-        img_f = fft2(whiten(img))
+
+        window_y = np.hanning(ref_img.shape[0])[..., None]
+        window_x = np.hanning(ref_img.shape[1])[..., None]
+        window = window_y * window_x.T
+        a = np.clip(polar2cart(np.fft.fftshift(np.fft.ifft2(np.abs(np.fft.fft2(ref_img*window))).real)*window),0,1)
+        b = np.clip(polar2cart(np.fft.fftshift(np.fft.ifft2(np.abs(np.fft.fft2(img*window))).real)*window),0,1)
+        (angle, _), _, _ = skimage.feature.register_translation(
+            whiten(a)*window, whiten(b)*window, 10
+        )
+        angle = angle / a.shape[0] * 360
+        img = skimage.transform.rotate(img, angle)
+
+        ref_img_f = fft2(whiten(ref_img * window))
+        img_f = fft2(whiten(img * window))
         shift, error, _ = skimage.feature.register_translation(
             ref_img_f, img_f, 10, 'fourier'
         )
         # Add reported difference in stage positions.
         shift += its.offsets[0]
-        return shift, error
+        return shift, angle, error
 
     def intersection(self, t):
         corners1 = np.vstack([self.reference_positions[t],
@@ -702,8 +717,6 @@ class Intersection(object):
         min_size = min_size.clip(0, max_shape)
         position = corners1.max(axis=0)
         initial_shape = np.ceil(corners2.min(axis=0) - position).astype(int)
-        if any(initial_shape <= 0):
-            raise ValueError("Tiles do not intersect")
         clipped_shape = np.maximum(initial_shape, min_size)
         self.shape = np.ceil(clipped_shape).astype(int)
         self.padding = self.shape - initial_shape

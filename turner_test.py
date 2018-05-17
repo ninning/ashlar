@@ -3,25 +3,25 @@ import matplotlib.pyplot as plt
 import modest_image
 from ashlar import reg
 
-reader1 = reg.BioformatsReader('input/mmo_test/Original/Scan 20x obj 25.nd')
-aligner1 = reg.EdgeAligner(reader1, channel=2, verbose=True)
+reader1 = reg.BioformatsReader('/mnt/imstor_files/sorger/data/computation/Jeremy/mmo12_ashlar_test/Original_180328/Set 2/Scan 20x obj 3.nd')
+aligner1 = reg.EdgeAligner(reader1, channel=0, max_shift=30, verbose=True)
 aligner1.run()
 
-reader2 = reg.BioformatsReader('input/mmo_test/Rescanned/25.nd')
+reader2 = reg.BioformatsReader('/mnt/imstor_files/sorger/data/computation/Jeremy/mmo12_ashlar_test/Rescanned_180328/Set 2/Scan 20x obj 3.nd')
 reader2.metadata.positions
-reader2.metadata._positions -= np.array([39670, 23238])
+reader2.metadata._positions -= np.array([76, -28])
 aligner2 = reg.LayerAligner(reader2, aligner1, verbose=True)
 aligner2.run()
 
 mosaic1 = reg.Mosaic(
-    aligner1, aligner1.mosaic_shape, 'output/mmo_test/1_original_{channel}.tif',
-    verbose=True, channels=[2]
+    aligner1, aligner1.mosaic_shape, 'output/set_1/1_original_{channel}.tif',
+    verbose=True, channels=[0]
 )
-(img1,) = mosaic1.run(mode='return')
+imgs1 = mosaic1.run(mode='return')
 #mosaic1.run()
 mosaic2 = reg.Mosaic(
-    aligner2, aligner1.mosaic_shape, 'output/mmo_test/2_rescanned_{channel}.tif',
-    verbose=True, channels=[2]
+    aligner2, aligner1.mosaic_shape, 'output/set_1/2_rescanned_{channel}.tif',
+    verbose=True, channels=[0]
 )
-(img2,) = mosaic2.run(mode='return')
+imgs2 = mosaic2.run(mode='return')
 #mosaic2.run()
