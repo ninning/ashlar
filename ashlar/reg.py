@@ -563,7 +563,7 @@ class EdgeAligner(object):
 class LayerAligner(object):
 
     def __init__(self, reader, reference_aligner, channel=None, max_shift=15,
-                 verbose=False):
+                 angle_range=(-90, 90), verbose=False):
         self.reader = reader
         self.reference_aligner = reference_aligner
         if channel is None:
@@ -572,6 +572,7 @@ class LayerAligner(object):
         # Unit is micrometers.
         self.max_shift = max_shift
         self.max_shift_pixels = self.max_shift / self.metadata.pixel_size
+        self.min_angle, self.max_angle = angle_range
         self.verbose = verbose
         self.tile_positions = self.metadata.positions - reference_aligner.origin
         reference_positions = (reference_aligner.metadata.positions
@@ -608,6 +609,7 @@ class LayerAligner(object):
         self.positions = base_positions + self.shifts
         self.constrain_positions()
         self.centers = self.positions + self.metadata.size / 2
+        self.constrain_angles()
 
     def constrain_positions(self):
         # Computed shifts of exactly 0,0 seem to result from failed
@@ -630,6 +632,12 @@ class LayerAligner(object):
         # Fill in discarded shifts from the predictions.
         self.positions[discard] = predictions[discard]
 
+    def constrain_angles(self):
+        # Set out-of-range angles to median of in-range angles.
+        extremes = ((self.angles < self.min_angle)
+                    | (self.angles > self.max_angle))
+        self.angles[extremes] = np.nan_to_num(np.median(self.angles[~extremes]))
+
     def register(self, t):
         """Return relative shift/angle between images and alignment error."""
         its, ref_img, img = self.overlap(t)
@@ -639,8 +647,8 @@ class LayerAligner(object):
         window_y = np.hanning(ref_img.shape[0])[..., None]
         window_x = np.hanning(ref_img.shape[1])[..., None]
         window = window_y * window_x.T
-        a = np.clip(polar2cart(np.fft.fftshift(np.fft.ifft2(np.abs(np.fft.fft2(ref_img*window))).real)*window),0,1)
-        b = np.clip(polar2cart(np.fft.fftshift(np.fft.ifft2(np.abs(np.fft.fft2(img*window))).real)*window),0,1)
+        a = np.clip(polar2cart(np.fft.fftshift(np.fft.ifft2(np.abs(np.fft.fft2(ref_img*window))).real)*window),0,None)
+        b = np.clip(polar2cart(np.fft.fftshift(np.fft.ifft2(np.abs(np.fft.fft2(img*window))).real)*window),0,None)
         (angle, _), _, _ = skimage.feature.register_translation(
             whiten(a)*window, whiten(b)*window, 10
         )
@@ -783,14 +791,18 @@ class Mosaic(object):
                     sys.stdout.flush()
                 tile_image = self.aligner.reader.read(c=channel, series=tile)
                 tile_image = self.correct_illumination(tile_image, channel)
+                try:
+                    angle = self.aligner.angles[tile]
+                except AttributeError:
+                    angle = None
                 if debug:
                     color_channel = node_colors[tile]
                     rgb_image = np.zeros(tile_image.shape + (3,),
                                          tile_image.dtype)
                     rgb_image[:,:,color_channel] = tile_image
                     tile_image = rgb_image
-                func = pastefunc_blend if not debug else np.add
-                paste(mosaic_image, tile_image, position, func=func)
+                func = np.maximum #pastefunc_blend if not debug else np.add
+                paste(mosaic_image, tile_image, position, angle, func=func)
             if debug:
                 np.clip(mosaic_image, 0, 1, out=mosaic_image)
                 w = int(1e6)
@@ -909,8 +921,16 @@ def fourier_shift(img, shift):
     return img_s.real
 
 
-def paste(target, img, pos, func=None):
+def paste(target, img, pos, angle=None, func=None):
     """Composite img into target."""
+    # Rotate img if necessary.
+    if angle is not None:
+        # TODO: rotate with resize=True
+        orig_shape = img.shape
+        img = skimage.transform.rotate(img, angle, resize=True)
+        shape_diff = np.array(img.shape) - orig_shape
+        pos -= shape_diff / 2
+    # Extract integer and fractional components of the position.
     pos_f, pos_i = np.modf(pos)
     yi, xi = pos_i.astype('i8')
     # Clip img to the edges of the mosaic.
