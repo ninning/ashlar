@@ -105,7 +105,7 @@ class Metadata(object):
             if any(any(self.tile_size(i) != s0) for i in image_ids):
                 raise ValueError("Image series must all have the same dimensions")
             self._size = s0
-        return self._size - [7, 0]
+        return self._size - [20, 0]
 
     @property
     def centers(self):
@@ -120,6 +120,29 @@ class Reader(object):
 
     def read(self, series, c):
         raise NotImplementedError
+
+
+class ShadingCorrectionMixin(object):
+
+    def _load_correction_profiles(self, dfp_path, ffp_path):
+        self.dfp_path = dfp_path
+        self.ffp_path = ffp_path
+        if dfp_path or ffp_path:
+            c = self.metadata.num_channels
+            self.dfp = skimage.io.imread(dfp_path) if dfp_path else np.zeros(c)
+            self.ffp = skimage.io.imread(ffp_path) if ffp_path else np.ones(c)
+            self.dfp /= np.iinfo(self.metadata.pixel_dtype).max
+            self.do_correction = True
+        else:
+            self.do_correction = False
+
+    def correct_shading(self, img, channel):
+        if self.do_correction:
+            img = skimage.img_as_float(img, force_copy=True)
+            img -= self.dfp[..., channel]
+            img /= self.ffp[..., channel]
+            img.clip(0, 1, out=img)
+        return img
 
 
 class BioformatsMetadata(Metadata):
@@ -212,12 +235,13 @@ class BioformatsMetadata(Metadata):
         return np.array(values, dtype=int)
 
 
-class BioformatsReader(Reader):
+class BioformatsReader(Reader, ShadingCorrectionMixin):
 
-    def __init__(self, path):
+    def __init__(self, path, dfp_path=None, ffp_path=None):
         self.path = path
         self.metadata = BioformatsMetadata(self.path)
         self._init_ir()
+        self._load_correction_profiles(dfp_path, ffp_path)
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -242,8 +266,8 @@ class BioformatsReader(Reader):
         dtype = self.metadata.pixel_dtype
         shape = self.metadata.tile_size(series)
         img = np.frombuffer(byte_array.tostring(), dtype=dtype).reshape(shape)
-        img = img[:-7, :]
-        return img
+        img = self.correct_shading(img, c)
+        return img[:-20,:]
 
 
 class LooseFilesMetadata(Metadata):
@@ -687,10 +711,10 @@ class LayerAligner(object):
         return self.reader.metadata
 
     def debug(self, t):
-        shift, _ = self.register(t)
+        shift, angle, _ = self.register(t)
         its, o1, o2 = self.overlap(t)
         w1 = whiten(o1)
-        w2 = whiten(o2)
+        w2 = whiten(skimage.transform.rotate(o2, angle))
         corr = np.fft.fftshift(np.abs(np.fft.ifft2(
             np.fft.fft2(w1) * np.fft.fft2(w2).conj()
         )))
@@ -738,13 +762,12 @@ class Intersection(object):
 class Mosaic(object):
 
     def __init__(self, aligner, shape, filename_format, channels=None,
-                 ffp_path=None, dfp_path=None, verbose=False):
+                 verbose=False):
         self.aligner = aligner
         self.shape = tuple(shape)
         self.filename_format = filename_format
         self.channels = self._sanitize_channels(channels)
         self.dtype = np.uint16
-        self._load_correction_profiles(dfp_path, ffp_path)
         self.verbose = verbose
         self.filenames = []
 
@@ -756,16 +779,6 @@ class Mosaic(object):
         if invalid_channels:
             raise ValueError("invalid channels: %s" % invalid_channels)
         return channels
-
-    def _load_correction_profiles(self, dfp_path, ffp_path):
-        if dfp_path or ffp_path:
-            c = max(self.channels) + 1
-            self.dfp = skimage.io.imread(dfp_path) if dfp_path else np.zeros(c)
-            self.ffp = skimage.io.imread(ffp_path) if ffp_path else np.ones(c)
-            self.dfp /= np.iinfo(self.dtype).max
-            self.do_correction = True
-        else:
-            self.do_correction = False
 
     def run(self, mode='write', debug=False):
         if mode not in ('write', 'return'):
@@ -784,13 +797,13 @@ class Mosaic(object):
                 mosaic_image = np.zeros(self.shape, self.dtype)
             else:
                 mosaic_image = np.zeros(self.shape + (3,), np.float32)
+            mosaic_image = self.xx
             for tile, position in enumerate(self.aligner.positions):
                 if self.verbose:
                     sys.stdout.write('\r        merging tile %d/%d'
                                      % (tile + 1, num_tiles))
                     sys.stdout.flush()
                 tile_image = self.aligner.reader.read(c=channel, series=tile)
-                tile_image = self.correct_illumination(tile_image, channel)
                 try:
                     angle = self.aligner.angles[tile]
                 except AttributeError:
@@ -828,14 +841,6 @@ class Mosaic(object):
                 all_images.append(mosaic_image)
         if mode == 'return':
             return all_images
-
-    def correct_illumination(self, img, channel):
-        if self.do_correction:
-            img = skimage.img_as_float(img, force_copy=True)
-            img -= self.dfp[..., channel]
-            img /= self.ffp[..., channel]
-            img.clip(0, 1, out=img)
-        return img
 
 
 def fft2(img):
@@ -928,7 +933,7 @@ def paste(target, img, pos, angle=None, func=None):
         # TODO: rotate with resize=True
         orig_shape = img.shape
         img = skimage.transform.rotate(img, angle, resize=True)
-        shape_diff = np.array(img.shape) - orig_shape
+        shape_diff = (np.array(img.shape) - orig_shape)[:2]
         pos -= shape_diff / 2
     # Extract integer and fractional components of the position.
     pos_f, pos_i = np.modf(pos)
