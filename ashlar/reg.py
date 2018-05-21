@@ -684,8 +684,23 @@ class LayerAligner(object):
         shift, error, _ = skimage.feature.register_translation(
             ref_img_f, img_f, 10, 'fourier'
         )
+
+        # Add shift due to different centers of rotation here (center of
+        # overlap) vs. mosaicing (center of image).
+        center_i = self.metadata.size / 2
+        center_o = its.offsets[1] + its.shape / 2
+        v = center_o - center_i
+        # Angle is inverted since image rotation was computed based on a
+        # coordinate system with Y flipped.
+        cos_a = np.cos(np.deg2rad(-angle))
+        sin_a = np.sin(np.deg2rad(-angle))
+        R = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+        v_rotated = np.dot(R, v)
+        shift += v_rotated - v
+
         # Add reported difference in stage positions.
-        shift += its.offsets[0]
+        shift += self.tile_positions[t] - self.reference_positions[t]
+
         return shift, angle, error
 
     def intersection(self, t):
@@ -934,7 +949,7 @@ def paste(target, img, pos, angle=None, func=None):
         orig_shape = img.shape
         img = skimage.transform.rotate(img, angle, resize=True)
         shape_diff = (np.array(img.shape) - orig_shape)[:2]
-        pos -= shape_diff / 2
+        pos = pos - shape_diff / 2
     # Extract integer and fractional components of the position.
     pos_f, pos_i = np.modf(pos)
     yi, xi = pos_i.astype('i8')
