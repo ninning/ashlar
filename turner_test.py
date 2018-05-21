@@ -1,3 +1,4 @@
+from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 import modest_image
@@ -26,13 +27,18 @@ aligner2.run()
 
 mosaic1 = reg.Mosaic(
     aligner1, aligner1.mosaic_shape, 'output/set_2/1_original_{channel}.tif',
-    verbose=True, channels=[0]
+    verbose=True, #channels=[0]
 )
-imgs1 = mosaic1.run(mode='return')
-#mosaic1.run()
+#imgs1 = mosaic1.run(mode='return')
+mosaic1.run()
+
 mosaic2 = reg.Mosaic(
     aligner2, aligner1.mosaic_shape, 'output/set_2/2_rescanned_{channel}.tif',
-    verbose=True, channels=[0]
+    verbose=True, #channels=[0]
 )
-imgs2 = mosaic2.run(mode='return')
-#mosaic2.run()
+#imgs2 = mosaic2.run(mode='return')
+mosaic2.run()
+
+#ic = np.empty(imgs1[0].shape+(3,), dtype=np.uint8)
+#ic[...,0] = imgs1[0] / 42
+#ic[...,1] = imgs2[0] / 14
