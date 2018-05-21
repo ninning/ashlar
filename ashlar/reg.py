@@ -631,9 +631,9 @@ class LayerAligner(object):
     def calculate_positions(self):
         base_positions = self.reference_aligner.positions[self.reference_idx]
         self.positions = base_positions + self.shifts
-        self.constrain_positions()
+        #self.constrain_positions()
         self.centers = self.positions + self.metadata.size / 2
-        self.constrain_angles()
+        #self.constrain_angles()
 
     def constrain_positions(self):
         # Computed shifts of exactly 0,0 seem to result from failed
@@ -812,7 +812,6 @@ class Mosaic(object):
                 mosaic_image = np.zeros(self.shape, self.dtype)
             else:
                 mosaic_image = np.zeros(self.shape + (3,), np.float32)
-            mosaic_image = self.xx
             for tile, position in enumerate(self.aligner.positions):
                 if self.verbose:
                     sys.stdout.write('\r        merging tile %d/%d'
