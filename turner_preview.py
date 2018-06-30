@@ -2,13 +2,21 @@ from __future__ import print_function, division
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import modest_image
+import skimage.transform
 from ashlar import reg
 
-reader1 = reg.BioformatsReader('input/mmo_test/Original/Scan 20x obj 25.nd')
-reader2 = reg.BioformatsReader('input/mmo_test/Rescanned/25.nd')
+def onclick(event):
+    idx = axes.index(event.inaxes)
+    print('%d: %f, %f' % (idx, event.xdata, event.ydata))
+    coords[idx, :] = [event.ydata, event.xdata]
 
-for r in (reader1, reader2):
+reader1 = reg.BioformatsReader(sys.argv[1])
+reader2 = reg.BioformatsReader(sys.argv[2])
+
+coords = np.zeros([2,2])
+axes = []
+
+for r in [reader1, reader2]:
 
     metadata = r.metadata
 
@@ -24,9 +32,18 @@ for r in (reader1, reader2):
         reg.paste(mosaic, r.read(c=2, series=i), positions[i])
     print()
 
-    plt.figure()
-    ax = plt.gca()
+    scale = np.max(mosaic.shape) / 2000
+    mosaic = skimage.transform.rescale(mosaic, 1 / scale)
+    x1 = metadata.origin
+    x2 = metadata.positions.max(axis=0) + metadata.size
+    extent = (x1[1], x2[1], x2[0], x1[0])
 
-    modest_image.imshow(ax, mosaic)
+    fig, ax = plt.subplots()
+    axes.append(ax)
+    ax.imshow(mosaic, extent=extent)
+    fig.canvas.mpl_connect('button_press_event', onclick)
 
+plt.ioff()
 plt.show()
+
+print(coords[1] - coords[0])
