@@ -6,6 +6,7 @@ import xml.etree.ElementTree
 import io
 import uuid
 import struct
+import collections
 try:
     import pathlib
 except ImportError:
@@ -432,6 +433,7 @@ class EdgeAligner(object):
         self.max_shift_pixels = self.max_shift / self.metadata.pixel_size
         self.false_positive_ratio = false_positive_ratio
         self._cache = {}
+        self._tile_cache = collections.OrderedDict()
 
     neighbors_graph = neighbors_graph
 
@@ -651,7 +653,13 @@ class EdgeAligner(object):
         return Intersection(corners1, corners2, min_size)
 
     def crop(self, tile, offset, shape):
-        img = self.reader.read(series=tile, c=self.channel)
+        try:
+            img = self._tile_cache[tile]
+        except KeyError:
+            if len(self._tile_cache) == 2:
+                self._tile_cache.popitem(False)
+            img = self.reader.read(series=tile, c=self.channel)
+            self._tile_cache[tile] = img
         return crop(img, offset, shape)
 
     def overlap(self, t1, t2, min_size):
