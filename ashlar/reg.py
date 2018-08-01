@@ -6,6 +6,9 @@ import xml.etree.ElementTree
 import io
 import uuid
 import struct
+import collections
+import concurrent.futures
+import threading
 try:
     import pathlib
 except ImportError:
@@ -371,6 +374,7 @@ class BioformatsReader(Reader):
         self.path = path
         self.metadata = BioformatsMetadata(self.path)
         self.metadata.set_active_plate_well(plate, well)
+        self._lock = threading.Lock()
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -382,13 +386,14 @@ class BioformatsReader(Reader):
         self._init_ir()
 
     def read(self, series, c):
-        self.metadata._reader.setSeries(self.metadata.active_series[series])
-        index = self.metadata._reader.getIndex(0, c, 0)
-        byte_array = self.metadata._reader.openBytes(index)
-        dtype = self.metadata.pixel_dtype
-        shape = self.metadata.tile_size(series)
-        img = np.frombuffer(byte_array.tostring(), dtype=dtype).reshape(shape)
-        return img
+        with self._lock:
+            self.metadata._reader.setSeries(self.metadata.active_series[series])
+            index = self.metadata._reader.getIndex(0, c, 0)
+            byte_array = self.metadata._reader.openBytes(index)
+            dtype = self.metadata.pixel_dtype
+            shape = self.metadata.tile_size(series)
+            img = np.frombuffer(byte_array.tostring(), dtype=dtype).reshape(shape)
+            return img
 
 
 # TileStatistics = collections.namedtuple(
@@ -454,14 +459,17 @@ class EdgeAligner(object):
             warnings.warn("Some neighboring tiles have zero overlap.")
 
     def register_all(self):
+        pool = concurrent.futures.ThreadPoolExecutor(4)
         n = self.neighbors_graph.size()
-        for i, (t1, t2) in enumerate(self.neighbors_graph.edges(), 1):
-            if self.verbose:
+        def process(edges):
+            return self.register_pair(*edges)
+        pmap = pool.map(process, self.neighbors_graph.edges())
+        if self.verbose:
+            for i, _ in enumerate(pmap, 1):
                 sys.stdout.write('\r    aligning edge %d/%d' % (i, n))
                 sys.stdout.flush()
-            self.register_pair(t1, t2)
-        if self.verbose:
             print()
+        pool.shutdown()
 
     def build_spanning_tree(self):
         # Note that this may be disconnected, so it's technically a forest.
@@ -546,9 +554,9 @@ class EdgeAligner(object):
             while True:
                 shift, error = self._register(t1, t2, min_size)
                 # Constrain shift.
-                if any(np.abs(shift) > self.max_shift_pixels):
-                    shift[:] = 0
-                    error = np.inf
+                # if any(np.abs(shift) > self.max_shift_pixels):
+                #     shift[:] = 0
+                #     error = np.inf
                 results.append([shift, error])
                 if all(min_size > max_its_size):
                     break
@@ -570,6 +578,7 @@ class EdgeAligner(object):
         shift, error, _ = skimage.feature.register_translation(
             img1_f, img2_f, 10, 'fourier'
         )
+        error = -np.log(np.sqrt(1 - error ** 2))
         # Account for padding, flipping the sign depending on the direction
         # between the tiles.
         p1, p2 = self.metadata.positions[[t1, t2]]
