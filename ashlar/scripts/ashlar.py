@@ -5,6 +5,7 @@ try:
     import pathlib
 except ImportError:
     import pathlib2 as pathlib
+import numpy as np
 from .. import __version__ as VERSION
 from .. import reg
 
@@ -31,6 +32,12 @@ def main(argv=sys.argv):
     parser.add_argument(
         '--output-channels', nargs='*', type=int, metavar='CHANNEL',
         help=('output only channels listed in CHANNELS; numbering starts at 0')
+    )
+    parser.add_argument(
+        '--no-stitch', default=False, action='store_true',
+        help=('do not stitch, only align individual series across images; all'
+              ' image series must have the same length, and output filenames'
+              ' will include a suffix denoting the series number')
     )
     parser.add_argument(
         '-m', '--maximum-shift', type=float, default=15, metavar='SHIFT',
@@ -137,17 +144,22 @@ def main(argv=sys.argv):
     if args.quiet is False:
         mosaic_args['verbose'] = True
 
+    if args.pyramid and args.no_stitch:
+        print("WARNING: Output files will be regular TIFF, not OME-TIFF.")
+    do_stitch = not args.no_stitch
+
     try:
         if args.plates:
             return process_plates(
                 filepaths, output_path, args.filename_format, ffp_paths,
-                dfp_paths, aligner_args, mosaic_args, args.pyramid, args.quiet
+                dfp_paths, aligner_args, mosaic_args, do_stitch, args.pyramid,
+                args.quiet
             )
         else:
             mosaic_path_format = str(output_path / args.filename_format)
             return process_single(
                 filepaths, mosaic_path_format, ffp_paths, dfp_paths,
-                aligner_args, mosaic_args, args.pyramid, args.quiet
+                aligner_args, mosaic_args, do_stitch, args.pyramid, args.quiet
             )
     except ProcessingError as e:
         print(e.message)
@@ -156,7 +168,7 @@ def main(argv=sys.argv):
 
 def process_single(
     filepaths, mosaic_path_format, ffp_paths, dfp_paths,
-    aligner_args, mosaic_args, pyramid, quiet, plate=None, well=None
+    aligner_args, mosaic_args, do_stitch, pyramid, quiet, plate=None, well=None
 ):
 
     output_path_0 = format_cycle(mosaic_path_format, 0)
@@ -170,6 +182,8 @@ def process_single(
     mosaic_args = mosaic_args.copy()
     if pyramid:
         mosaic_args['combined'] = True
+    if not do_stitch:
+        mosaic_args['separate_series'] = True
     num_channels = 0
 
     if not quiet:
@@ -177,7 +191,10 @@ def process_single(
         print('    reading %s' % filepaths[0])
     reader = reg.BioformatsReader(filepaths[0], plate=plate, well=well)
     edge_aligner = reg.EdgeAligner(reader, **aligner_args)
-    edge_aligner.run()
+    if do_stitch:
+        edge_aligner.run()
+    else:
+        edge_aligner.positions = np.zeros((reader.metadata.num_images, 2))
     mshape = edge_aligner.mosaic_shape
     mosaic_args_final = mosaic_args.copy()
     mosaic_args_final['first'] = True
@@ -191,13 +208,29 @@ def process_single(
     mosaic.run()
     num_channels += len(mosaic.channels)
 
+    if not do_stitch:
+        fake_positions = np.array([
+            reader.metadata.size * [i, 0]
+            for i in range(reader.metadata.num_images)
+        ], float)
+        series_idx = reader.metadata.active_series
+        _ = edge_aligner.metadata.positions
+        edge_aligner.metadata._positions[series_idx] = fake_positions
+        edge_aligner.positions = fake_positions
+        edge_aligner.spanning_tree = edge_aligner.neighbors_graph.copy()
+        edge_aligner.fit_model()
     for cycle, filepath in enumerate(filepaths[1:], 1):
         if not quiet:
             print('Cycle %d:' % cycle)
             print('    reading %s' % filepath)
         reader = reg.BioformatsReader(filepath, plate=plate, well=well)
+        if not do_stitch:
+            _ = reader.metadata.positions
+            reader.metadata._positions[series_idx] = edge_aligner.positions
         layer_aligner = reg.LayerAligner(reader, edge_aligner, **aligner_args)
         layer_aligner.run()
+        if not do_stitch:
+            layer_aligner.positions -= edge_aligner.positions
         mosaic_args_final = mosaic_args.copy()
         if ffp_paths:
             mosaic_args_final['ffp_path'] = ffp_paths[cycle]
@@ -210,7 +243,7 @@ def process_single(
         mosaic.run()
         num_channels += len(mosaic.channels)
 
-    if pyramid:
+    if pyramid and do_stitch:
         print("Building pyramid")
         reg.build_pyramid(
             output_path_0, num_channels, mshape, reader.metadata.pixel_dtype,
@@ -222,7 +255,7 @@ def process_single(
 
 def process_plates(
     filepaths, output_path, filename_format, ffp_paths, dfp_paths,
-    aligner_args, mosaic_args, pyramid, quiet
+    aligner_args, mosaic_args, do_stitch, pyramid, quiet
 ):
 
     metadata = reg.BioformatsMetadata(filepaths[0])
@@ -241,7 +274,8 @@ def process_plates(
                 mosaic_path_format = str(well_path / filename_format)
                 process_single(
                     filepaths, mosaic_path_format, ffp_paths, dfp_paths,
-                    aligner_args, mosaic_args, pyramid, quiet, plate=p, well=w
+                    aligner_args, mosaic_args, do_stitch, pyramid, quiet,
+                    plate=p, well=w
                 )
             else:
                 print("Skipping -- No images found.")
