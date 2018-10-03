@@ -21,7 +21,8 @@ requires = [
     'pyfftw>=0.10.4',
     'scipy>=0.19.1',
     'scikit-image>=0.14.0',
-    'scikit-learn>=0.19.1'
+    'scikit-learn>=0.19.1',
+    'attrs>=18.2.0',
 ]
 
 
