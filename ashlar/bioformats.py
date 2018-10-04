@@ -47,20 +47,22 @@ class BioformatsReader(object):
 
     @classmethod
     def from_path(cls, path):
+        """Return a new BioformatsReader given a path to a file."""
         factory = ServiceFactory()
         service = jnius.cast(OMEXMLService, factory.getInstance(OMEXMLService))
         bf_metadata = service.createOMEXMLMetadata()
         bf_reader = ChannelSeparator()
         bf_reader.setMetadataStore(bf_metadata)
         # FIXME Workaround for pyjnius #300.
-        bf_reader.setId(JString(path))
+        bf_reader.setId(JString(str(path)))
         return cls(path, bf_reader ,bf_metadata)
 
     @property
     def metadata(self):
         """Return a TileSetMetadata object representing this dataset."""
         return TileSetMetadata(
-            self.pixel_dtype, self.pixel_size, self.tile_shape, self.positions
+            self.pixel_dtype, self.pixel_size, self.num_channels,
+            self.tile_shape, self.positions
         )
 
     @property
@@ -87,6 +89,11 @@ class BioformatsReader(object):
                 "can't handle non-square pixels: ({}, {})".format(values)
             )
         return values[0]
+
+    @property
+    def num_channels(self):
+        # FIXME verify all images have the same number of channels.
+        return self.bf_metadata.getChannelCount(0)
 
     @property
     def tile_shape(self):

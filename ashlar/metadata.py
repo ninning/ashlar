@@ -15,6 +15,7 @@ class TileSetMetadata(object):
     """
     pixel_dtype = attr.ib()
     pixel_size = attr.ib()
+    num_channels = attr.ib()
     tile_shape = attr.ib(converter=array_copy_immutable)
     positions = attr.ib(converter=array_copy_immutable)
 
