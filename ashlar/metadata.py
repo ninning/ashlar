@@ -47,19 +47,23 @@ class TileSetMetadata(object):
         """Return plotter utility object (see MetadataPlotter)."""
         return TileSetMetadataPlotter(self)
 
-    @property
-    def neighbors_graph(self):
-        """Return graph of neighboring (overlapping) tiles.
+    def build_neighbors_graph(self, bias=0):
+        """Return graph of neighboring (overlapping or abutting) tiles.
 
         Tiles are considered neighbors if the 'city block' distance between them
-        is less than the largest tile dimension.
+        is less than the largest tile dimension plus `bias`.
+
+        By default (`bias`=0) only strictly overlapping tiles are counted as
+        neighbors. Increasing `bias` will include tiles that just touch or are
+        slightly separated. Decreasing `bias` will exclude tiles that only
+        slightly overlap.
 
         """
         # FIXME: This should properly test for overlap, possibly via
         # intersection of bounding rectangles.
         pdist = scipy.spatial.distance.pdist(self.positions, metric='cityblock')
         sp = scipy.spatial.distance.squareform(pdist)
-        max_distance = np.max(self.tile_shape_microns) + 1
+        max_distance = np.max(self.tile_shape_microns) + bias
         edges = zip(*np.nonzero((sp > 0) & (sp < max_distance)))
         graph = nx.from_edgelist(edges)
         return graph
