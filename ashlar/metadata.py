@@ -36,7 +36,7 @@ class TileSetMetadata(object):
     @property
     def centers(self):
         """Return array of Y, X tile centers."""
-        return self.positions + self.tile_shape / 2
+        return self.positions + self.tile_shape_microns / 2
 
     @property
     def origin(self):
