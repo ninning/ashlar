@@ -3,9 +3,7 @@ import attr
 import numpy as np
 import scipy.spatial.distance
 import networkx as nx
-from .util import array_copy_immutable
-from .plot import TileSetMetadataPlotter
-from .geometry import Vector, Rectangle
+from . import util, geometry, plot
 
 
 @attr.s(frozen=True)
@@ -17,8 +15,8 @@ class TileSetMetadata(object):
     pixel_dtype = attr.ib()
     pixel_size = attr.ib()
     num_channels = attr.ib()
-    tile_shape = attr.ib(converter=array_copy_immutable)
-    positions = attr.ib(converter=array_copy_immutable)
+    tile_shape = attr.ib(converter=util.array_copy_immutable)
+    positions = attr.ib(converter=util.array_copy_immutable)
 
     @property
     def tile_shape_microns(self):
@@ -46,17 +44,17 @@ class TileSetMetadata(object):
     @property
     def rectangles(self):
         """Return list of Rectangles representing tiles."""
-        shape = Vector.from_ndarray(self.tile_shape_microns)
+        shape = geometry.Vector.from_ndarray(self.tile_shape_microns)
         rectangles = [
-            Rectangle.from_shape(Vector.from_ndarray(p), shape)
+            geometry.Rectangle.from_shape(geometry.Vector.from_ndarray(p), shape)
             for p in self.positions
         ]
         return rectangles
 
     @property
     def plot(self):
-        """Return plotter utility object (see MetadataPlotter)."""
-        return TileSetMetadataPlotter(self)
+        """Return plotter utility object (see plot.TileSetMetadataPlotter)."""
+        return plot.TileSetMetadataPlotter(self)
 
     def build_neighbors_graph(self, bias=0):
         """Return graph of neighboring (overlapping or abutting) tiles.
@@ -70,7 +68,7 @@ class TileSetMetadata(object):
         slightly overlap.
 
         """
-        bias_v = Vector(bias, bias)
+        bias_v = geometry.Vector(bias, bias)
         recs = [r + bias_v for r in self.rectangles]
         overlaps = [[r1.intersection(r2).area for r2 in recs] for r1 in recs]
         graph = nx.from_edgelist(

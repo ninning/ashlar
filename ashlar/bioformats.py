@@ -6,7 +6,7 @@ except ImportError:
     import pathlib2 as pathlib
 import numpy as np
 import attr
-from .metadata import TileSetMetadata
+from . import metadata
 
 import jnius_config
 if not jnius_config.vm_running:
@@ -60,7 +60,7 @@ class BioformatsReader(object):
     @property
     def metadata(self):
         """Return a TileSetMetadata object representing this dataset."""
-        return TileSetMetadata(
+        return metadata.TileSetMetadata(
             self.pixel_dtype, self.pixel_size, self.num_channels,
             self.tile_shape, self.positions
         )

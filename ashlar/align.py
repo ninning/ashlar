@@ -1,7 +1,7 @@
 import numbers
 import attr
 import numpy as np
-import .geometry as geometry
+from . import geometry
 
 
 @attr.s(frozen=True)
