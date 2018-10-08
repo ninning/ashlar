@@ -29,12 +29,38 @@ class TileSetMetadataPlotter(object):
         self._aspect_equal(ax)
 
     def neighbors_graph(self, ax=None, **kwargs):
-        """Draw the neighbors graph using the tile positions for layout."""
-        pos = np.fliplr(self.metadata.positions)
-        g = self.metadata.neighbors_graph
+        """Draw the neighbors graph using the tile centers for layout."""
+        defaults = dict(
+            font_size=6, node_size=100, node_color='orange'
+        )
+        for k, v in defaults.items():
+            kwargs.setdefault(k, v)
+        ng_kwargs = {}
+        try:
+            ng_kwargs['bias'] = kwargs.pop('bias')
+        except KeyError:
+            pass
+        g = self.metadata.build_neighbors_graph(**ng_kwargs)
+        pos = np.fliplr(self.metadata.centers)
         if ax is None:
             ax = self.plt.gca()
-        nx.draw(g, ax=ax, pos=pos)
+        nx.draw(g, ax=ax, pos=pos, with_labels=True, **kwargs)
+        self._aspect_equal(ax)
+
+    def rectangles(self, ax=None, **kwargs):
+        """Draw a rectangle representing each tile's position and size."""
+        defaults = dict(color='black', fill=False, lw=0.5)
+        for k, v in defaults.items():
+            kwargs.setdefault(k, v)
+        if ax is None:
+            ax = self.plt.gca()
+        for r in self.metadata.rectangles:
+            xy = (r.vector1.x, r.vector1.y)
+            w = r.shape.x
+            h = r.shape.y
+            mrect = self.plt.Rectangle(xy, w, h, **kwargs)
+            ax.add_patch(mrect)
+        ax.autoscale_view()
         self._aspect_equal(ax)
 
     def _aspect_equal(self, ax):
