@@ -5,6 +5,7 @@ import scipy.spatial.distance
 import networkx as nx
 from .util import array_copy_immutable
 from .plot import TileSetMetadataPlotter
+from .geometry import Vector, Rectangle
 
 
 @attr.s(frozen=True)
@@ -43,6 +44,16 @@ class TileSetMetadata(object):
         return np.min(self.positions, axis=0)
 
     @property
+    def rectangles(self):
+        """Return list of Rectangles representing tiles."""
+        shape = Vector.from_ndarray(self.tile_shape_microns)
+        rectangles = [
+            Rectangle.from_shape(Vector.from_ndarray(p), shape)
+            for p in self.positions
+        ]
+        return rectangles
+
+    @property
     def plot(self):
         """Return plotter utility object (see MetadataPlotter)."""
         return TileSetMetadataPlotter(self)
@@ -59,13 +70,12 @@ class TileSetMetadata(object):
         slightly overlap.
 
         """
-        # FIXME: This should properly test for overlap, possibly via
-        # intersection of bounding rectangles.
-        pdist = scipy.spatial.distance.pdist(self.positions, metric='cityblock')
-        sp = scipy.spatial.distance.squareform(pdist)
-        max_distance = np.max(self.tile_shape_microns) + bias
-        edges = zip(*np.nonzero((sp > 0) & (sp < max_distance)))
-        graph = nx.from_edgelist(edges)
+        bias_v = Vector(bias, bias)
+        recs = [r + bias_v for r in self.rectangles]
+        overlaps = [[r1.intersection(r2).area for r2 in recs] for r1 in recs]
+        graph = nx.from_edgelist(
+            (t1, t2) for t1, t2 in zip(*np.nonzero(overlaps)) if t1 < t2
+        )
         return graph
 
     def __len__(self):
