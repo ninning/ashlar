@@ -57,19 +57,15 @@ class TileSetMetadata(object):
         return plot.TileSetMetadataPlotter(self)
 
     def build_neighbors_graph(self, bias=0):
-        """Return graph of neighboring (overlapping or abutting) tiles.
+        """Return graph of neighboring tiles.
 
-        Tiles are considered neighbors if the 'city block' distance between them
-        is less than the largest tile dimension plus `bias`.
-
-        By default (`bias`=0) only strictly overlapping tiles are counted as
-        neighbors. Increasing `bias` will include tiles that just touch or are
-        slightly separated. Decreasing `bias` will exclude tiles that only
-        slightly overlap.
+        Tiles are considered neighboring if their bounding rectangles overlap.
+        The `bias` parameter will expand or contract the rectangles for a more
+        or less inclusive test. By default (`bias`=0) only strictly overlapping
+        tiles are counted as neighbors.
 
         """
-        bias_v = geometry.Vector(bias, bias)
-        recs = [r + bias_v for r in self.rectangles]
+        recs = [r.inflate(bias) for r in self.rectangles]
         overlaps = [[r1.intersection(r2).area for r2 in recs] for r1 in recs]
         graph = nx.from_edgelist(
             (t1, t2) for t1, t2 in zip(*np.nonzero(overlaps)) if t1 < t2
