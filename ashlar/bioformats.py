@@ -58,11 +58,10 @@ class BioformatsReader(object):
         return cls(path, bf_reader ,bf_metadata)
 
     @property
-    def metadata(self):
-        """Return a TileSetMetadata object representing this dataset."""
-        return metadata.TileSetMetadata(
-            self.pixel_dtype, self.pixel_size, self.num_channels,
-            self.tile_shape, self.positions
+    def geometry(self):
+        """Return a TileSetGeometry object representing this dataset."""
+        return metadata.TileSetGeometry(
+            self.tile_shape_microns, self.positions
         )
 
     @property
@@ -104,6 +103,10 @@ class BioformatsReader(object):
         ]
         shape = np.array([q.value for q in quantities], dtype=int)
         return shape
+
+    @property
+    def tile_shape_microns(self):
+        return self.tile_shape * self.pixel_size
 
     @property
     def positions(self):

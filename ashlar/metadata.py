@@ -7,20 +7,14 @@ from . import util, geometry, plot
 
 
 @attr.s(frozen=True)
-class TileSetMetadata(object):
-    """Tile set metadata.
+class TileSetGeometry(object):
+    """Physical layout of a set of image tiles.
 
-    Tile position coordinates are always kept in microns, not pixels!
+    Tile positions and shapes are always in microns, not pixels!
+
     """
-    pixel_dtype = attr.ib()
-    pixel_size = attr.ib()
-    num_channels = attr.ib()
     tile_shape = attr.ib(converter=util.array_copy_immutable)
     positions = attr.ib(converter=util.array_copy_immutable)
-
-    @property
-    def tile_shape_microns(self):
-        return self.tile_shape * self.pixel_size
 
     @property
     def grid_shape(self):
@@ -34,27 +28,27 @@ class TileSetMetadata(object):
     @property
     def centers(self):
         """Return array of Y, X tile centers."""
-        return self.positions + self.tile_shape_microns / 2
+        return self.positions + self.tile_shape / 2
 
     @property
     def origin(self):
         """Return array of minimum Y, X coordinates."""
-        return np.min(self.positions, axis=0)
+        return geometry.Vector.from_ndarray(np.min(self.positions, axis=0))
 
     @property
     def rectangles(self):
         """Return list of Rectangles representing tiles."""
-        shape = geometry.Vector.from_ndarray(self.tile_shape_microns)
+        ts = geometry.Vector.from_ndarray(self.tile_shape)
         rectangles = [
-            geometry.Rectangle.from_shape(geometry.Vector.from_ndarray(p), shape)
+            geometry.Rectangle.from_shape(geometry.Vector.from_ndarray(p), ts)
             for p in self.positions
         ]
         return rectangles
 
     @property
     def plot(self):
-        """Return plotter utility object (see plot.TileSetMetadataPlotter)."""
-        return plot.TileSetMetadataPlotter(self)
+        """Return plotter utility object (see plot.TileSetGeometryPlotter)."""
+        return plot.TileSetGeometryPlotter(self)
 
     def build_neighbors_graph(self, bias=0):
         """Return graph of neighboring tiles.

@@ -13,13 +13,13 @@ except ImportError:
 
 
 @attr.s(frozen=True)
-class TileSetMetadataPlotter(object):
-    """TileSetMetadata plotting helper
+class TileSetGeometryPlotter(object):
+    """TileSetGeometry plotting helper
 
     Call one of the plot methods explicitly, or call the plotter itself for
     the default plot, `scatter`.
     """
-    metadata = attr.ib()
+    geometry = attr.ib()
 
     def __call__(self, **kwargs):
         self.scatter(**kwargs)
@@ -28,7 +28,7 @@ class TileSetMetadataPlotter(object):
         """Create a scatter plot of the tile positions."""
         if ax is None:
             ax = plt.gca()
-        y, x = self.metadata.positions.T
+        y, x = self.geometry.positions.T
         ax.scatter(x, y, **kwargs)
         ax.set_aspect('equal')
 
@@ -44,8 +44,8 @@ class TileSetMetadataPlotter(object):
             ng_kwargs['bias'] = kwargs.pop('bias')
         except KeyError:
             pass
-        g = self.metadata.build_neighbors_graph(**ng_kwargs)
-        pos = np.fliplr(self.metadata.centers)
+        g = self.geometry.build_neighbors_graph(**ng_kwargs)
+        pos = np.fliplr(self.geometry.centers)
         if ax is None:
             ax = plt.gca()
         nx.draw(g, ax=ax, pos=pos, with_labels=True, **kwargs)
@@ -53,7 +53,7 @@ class TileSetMetadataPlotter(object):
 
     def rectangles(self, ax=None, **kwargs):
         """Draw a rectangle representing each tile's position and size."""
-        for r in self.metadata.rectangles:
+        for r in self.geometry.rectangles:
             draw_rectangle(r, ax, **kwargs)
 
 
