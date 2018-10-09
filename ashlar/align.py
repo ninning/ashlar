@@ -23,11 +23,13 @@ class TilePair(object):
 
 
 def register(img1, img2, upsample_factor=1):
-    """Wrap skimage registration to apply our conventions and enhancements.
+    """Return translation shift from img2 to img2 and an error metric.
 
-    We pre-whiten the input images, use optimized FFTW FFT functions, and
-    transform the skimage-generated error metric into a mathematical space
-    that's more useful for us.
+    This function wraps skimage registration to apply our conventions and
+    enhancements. We pre-whiten the input images, use optimized FFTW FFT
+    functions, always provide fourier-space input images, and mathematically
+    transform the skimage-generated error metric in a way that makes it more
+    useful for us.
 
     """
     img1_f = fft2(whiten(img1))
