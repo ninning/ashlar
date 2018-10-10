@@ -58,11 +58,17 @@ class BioformatsReader(object):
         return cls(path, bf_reader ,bf_metadata)
 
     @property
-    def geometry(self):
-        """Return a TileSetGeometry object representing this dataset."""
-        return metadata.TileSetGeometry(
-            self.tile_shape_microns, self.positions
+    def tileset(self):
+        """Return a TileSet object representing this dataset."""
+        return metadata.TileSet(
+            self.tile_shape_microns, self.positions, self.image_reader
         )
+
+    @property
+    def image_reader(self):
+        """Return an ImageReader object for this dataset."""
+        series_indices = range(self.num_tiles)
+        return BioformatsImageReader(self, series_indices)
 
     @property
     def pixel_dtype(self):
@@ -157,6 +163,26 @@ class BioformatsReader(object):
     def has_overview_image(self):
         last_image_name = self.bf_metadata.getImageName(self.num_images - 1)
         return 'overview' in last_image_name.lower()
+
+    def read_image(self, series, channel):
+        self.bf_reader.setSeries(series)
+        index = self.bf_reader.getIndex(0, channel, 0)
+        byte_array = self.bf_reader.openBytes(index)
+        dtype = self.pixel_dtype
+        shape = self.tile_shape
+        img = np.frombuffer(byte_array.tostring(), dtype=dtype).reshape(shape)
+        return img
+
+
+@attr.s(frozen=True)
+class BioformatsImageReader(metadata.ImageReader):
+    reader = attr.ib(validator=attr.validators.instance_of(BioformatsReader))
+    series_indices = attr.ib()
+
+    def read(self, image_number, channel):
+        series = self.series_indices[image_number]
+        img = self.reader.read_image(series, channel)
+        return img
 
 
 def length_as_microns(quantity, name):

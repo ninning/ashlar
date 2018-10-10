@@ -1,4 +1,5 @@
 from __future__ import division, print_function
+from abc import abstractmethod
 import attr
 import numpy as np
 import scipy.spatial.distance
@@ -6,15 +7,24 @@ import networkx as nx
 from . import util, geometry, plot
 
 
+class ImageReader(util.ABC):
+
+    @abstractmethod
+    def read(self, image_number, channel):
+        """Return one image plane from a multi-channel image series."""
+        pass
+
+
 @attr.s(frozen=True)
-class TileSetGeometry(object):
-    """Physical layout of a set of image tiles.
+class TileSet(object):
+    """Physical layout of a set of image tiles and access to the pixels.
 
     Tile positions and shapes are always in microns, not pixels!
 
     """
     tile_shape = attr.ib(converter=util.array_copy_immutable)
     positions = attr.ib(converter=util.array_copy_immutable)
+    _reader = attr.ib(validator=attr.validators.instance_of(ImageReader))
 
     @property
     def grid_shape(self):
@@ -47,8 +57,8 @@ class TileSetGeometry(object):
 
     @property
     def plot(self):
-        """Return plotter utility object (see plot.TileSetGeometryPlotter)."""
-        return plot.TileSetGeometryPlotter(self)
+        """Return plotter utility object (see plot.TileSetPlotter)."""
+        return plot.TileSetPlotter(self)
 
     def build_neighbors_graph(self, bias=0):
         """Return graph of neighboring tiles.
@@ -66,5 +76,26 @@ class TileSetGeometry(object):
         )
         return graph
 
+    def get_tile(self, tile_number, channel):
+        img = self._reader.read(tile_number, channel)
+        bounds = self.rectangles[tile_number]
+        tile = Tile(tile_number, channel, img, bounds)
+        return tile
+
     def __len__(self):
         return len(self.positions)
+
+
+@attr.s(frozen=True)
+class Tile(object):
+    tile_number = attr.ib()
+    channel = attr.ib()
+    img = attr.ib(validator=attr.validators.instance_of(np.ndarray))
+    bounds = attr.ib(validator=attr.validators.instance_of(geometry.Rectangle))
+
+
+@attr.s(frozen=True)
+class TilePair(object):
+    tile1 = attr.ib(validator=attr.validators.instance_of(Tile))
+    tile2 = attr.ib(validator=attr.validators.instance_of(Tile))
+    padding = attr.ib()

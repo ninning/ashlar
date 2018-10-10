@@ -13,8 +13,8 @@ except ImportError:
 
 
 @attr.s(frozen=True)
-class TileSetGeometryPlotter(object):
-    """TileSetGeometry plotting helper
+class TileSetPlotter(object):
+    """TileSet plotting helper
 
     Call one of the plot methods explicitly, or call the plotter itself for
     the default plot, `scatter`.
@@ -48,7 +48,7 @@ class TileSetGeometryPlotter(object):
         pos = np.fliplr(self.geometry.centers)
         if ax is None:
             ax = plt.gca()
-        nx.draw(g, ax=ax, pos=pos, with_labels=True, **kwargs)
+        nx.draw_networkx(g, ax=ax, pos=pos, with_labels=True, **kwargs)
         ax.set_aspect('equal')
 
     def rectangles(self, ax=None, **kwargs):

@@ -1,4 +1,9 @@
+import abc
 import numpy as np
+
+
+# Abstract base class compatible with both Python 2 and 3.
+ABC = abc.ABCMeta('ABC', (object,), {})
 
 
 def array_copy_immutable(data):

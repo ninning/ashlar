@@ -3,23 +3,9 @@ import attr
 import numpy as np
 import skimage.feature
 import pyfftw
-from . import geometry
 
 # Patch np.fft to use pyfftw so skimage utilities can benefit.
 np.fft = pyfftw.interfaces.numpy_fft
-
-
-@attr.s(frozen=True)
-class Tile(object):
-    img = attr.ib(validator=attr.validators.instance_of(np.ndarray))
-    bounds = attr.ib(validator=attr.validators.instance_of(geometry.Rectangle))
-
-
-@attr.s(frozen=True)
-class TilePair(object):
-    tile1 = attr.ib(validator=attr.validators.instance_of(Tile))
-    tile2 = attr.ib(validator=attr.validators.instance_of(Tile))
-    padding = attr.ib()
 
 
 def register(img1, img2, upsample_factor=1):
