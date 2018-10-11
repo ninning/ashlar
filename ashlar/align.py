@@ -1,6 +1,7 @@
 import numbers
 import attr
 import numpy as np
+import scipy.ndimage
 import skimage.feature
 import pyfftw
 

@@ -67,6 +67,28 @@ class Rectangle(object):
         object.__setattr__(self, 'vector1', v1)
         object.__setattr__(self, 'vector2', v2)
 
+    def __add__(self, other):
+        if not isinstance(other, Vector):
+            raise NotImplementedError
+        return Rectangle(self.vector1 + other, self.vector2 + other)
+
+    def __sub__(self, other):
+        if not isinstance(other, Vector):
+            raise NotImplementedError
+        return Rectangle(self.vector1 - other, self.vector2 - other)
+
+    def __mul__(self, other):
+        if not isinstance(other, numbers.Number):
+            raise NotImplementedError
+        return Rectangle(self.vector1 * other, self.vector2 * other)
+
+    def __truediv__(self, other):
+        if not isinstance(other, numbers.Number):
+            raise NotImplementedError
+        return Rectangle(self.vector1 / other, self.vector2 / other)
+
+    __div__ = __truediv__
+
     @property
     def shape(self):
         return self.vector2 - self.vector1
@@ -79,6 +101,15 @@ class Rectangle(object):
     @property
     def center(self):
         return (self.vector1 + self.vector2) / 2
+
+    @property
+    def as_slice(self):
+        """Representation of rectangle, rounded, as a numpy array slice."""
+        ys = self.vector1.y, self.vector2.y
+        xs = self.vector1.x, self.vector2.x
+        indices = [np.round(v).astype(int) for v in (ys, xs)]
+        slices = tuple(slice(*v) for v in indices)
+        return slices
 
     def inflate(self, d):
         """Return a Rectangle that's `d` units bigger on all sides.

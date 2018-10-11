@@ -68,7 +68,10 @@ class BioformatsReader(object):
     def image_reader(self):
         """Return an ImageReader object for this dataset."""
         series_indices = range(self.num_tiles)
-        return BioformatsImageReader(self, series_indices)
+        return BioformatsImageReader(
+            self.pixel_dtype, self.pixel_size, self.num_channels, self,
+            series_indices
+        )
 
     @property
     def pixel_dtype(self):

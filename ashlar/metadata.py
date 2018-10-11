@@ -7,7 +7,11 @@ import networkx as nx
 from . import util, geometry, plot
 
 
+@attr.s(frozen=True)
 class ImageReader(util.ABC):
+    dtype = attr.ib()
+    pixel_size = attr.ib()
+    num_channels = attr.ib()
 
     @abstractmethod
     def read(self, image_number, channel):
@@ -77,9 +81,9 @@ class TileSet(object):
         return graph
 
     def get_tile(self, tile_number, channel):
-        img = self._reader.read(tile_number, channel)
+        image = self._reader.read(tile_number, channel)
         bounds = self.rectangles[tile_number]
-        tile = Tile(tile_number, channel, img, bounds)
+        tile = Tile(image, bounds, self._reader.pixel_size)
         return tile
 
     def __len__(self):
@@ -88,10 +92,20 @@ class TileSet(object):
 
 @attr.s(frozen=True)
 class Tile(object):
-    tile_number = attr.ib()
-    channel = attr.ib()
-    img = attr.ib(validator=attr.validators.instance_of(np.ndarray))
+    image = attr.ib(validator=attr.validators.instance_of(np.ndarray))
     bounds = attr.ib(validator=attr.validators.instance_of(geometry.Rectangle))
+    pixel_size = attr.ib()
+
+    def intersection(self, other, min_overlap=0):
+        bounds = self.bounds.intersection(other.bounds)
+        shape = bounds.shape
+        min_width = min(shape.y, shape.x)
+        padding = min_overlap - min_width
+        if padding > 0:
+            bounds = self.bounds.intersection(bounds.inflate(padding))
+        crop_region = (bounds - self.bounds.vector1) / self.pixel_size
+        image = self.image[crop_region.as_slice]
+        return Tile(image, bounds, self.pixel_size)
 
 
 @attr.s(frozen=True)
