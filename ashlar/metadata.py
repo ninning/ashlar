@@ -106,10 +106,3 @@ class Tile(object):
         crop_region = (bounds - self.bounds.vector1) / self.pixel_size
         image = self.image[crop_region.as_slice]
         return Tile(image, bounds, self.pixel_size)
-
-
-@attr.s(frozen=True)
-class TilePair(object):
-    tile1 = attr.ib(validator=attr.validators.instance_of(Tile))
-    tile2 = attr.ib(validator=attr.validators.instance_of(Tile))
-    padding = attr.ib()

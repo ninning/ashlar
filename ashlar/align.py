@@ -5,11 +5,31 @@ import scipy.ndimage
 import skimage.feature
 import pyfftw
 
+from . import geometry
+
 # Patch np.fft to use pyfftw so skimage utilities can benefit.
 np.fft = pyfftw.interfaces.numpy_fft
 
 
-def register(img1, img2, upsample_factor=1):
+@attr.s
+class TileAlignment(object):
+    shift = attr.ib(validator=attr.validators.instance_of(geometry.Vector))
+    error = attr.ib()
+
+
+def register_tiles(tile1, tile2):
+    if tile1.pixel_size != tile2.pixel_size:
+        raise ValueError("tiles have different pixel sizes")
+    shift_pixels, error = register(tile1.image, tile2.image)
+    shift = geometry.Vector.from_ndarray(shift_pixels) * tile1.pixel_size
+    # TODO Resolve phase confusion by either 1) Testing direct correlation at
+    # the 4 possible shifts; or 2) Apply a windowing function before
+    # registration.
+    shift_adjusted = shift + (tile1.bounds.vector1 - tile2.bounds.vector1)
+    return TileAlignment(shift_adjusted, error)
+
+
+def register(img1, img2, upsample_factor=10):
     """Return translation shift from img2 to img2 and an error metric.
 
     This function wraps skimage registration to apply our conventions and
@@ -22,7 +42,7 @@ def register(img1, img2, upsample_factor=1):
     img1_f = fft2(whiten(img1))
     img2_f = fft2(whiten(img2))
     shift, error, _ = skimage.feature.register_translation(
-        img1_f, img2_f, 10, 'fourier'
+        img1_f, img2_f, upsample_factor, 'fourier'
     )
     # Recover the intensity-normalized correlation magnitude by inverting the
     # transformation applied by register_translation.
