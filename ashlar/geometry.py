@@ -132,14 +132,22 @@ class Rectangle(object):
     def intersection(self, other):
         """"Return the intersection of self and `other` as a Rectangle.
 
-        If the rectangles don't intersect, the returned Rectangle will have both
-        corners set to (0, 0). This includes all intersections with zero area --
-        both points and lines.
+        If self and `other` don't overlap or merely touch, the returned
+        Rectangle will always have an area of zero. Its two corners represent
+        the points along one edge of self closest to the corners of `other`,
+        using the city block metric.
 
         """
-        p1 = self.rmax(self.vector1, other.vector1)
-        p2 = self.rmin(self.vector2, other.vector2)
-        # Check for degenerate rectangle.
-        if p1.x >= p2.x or p1.y >= p2.y:
-            p1 = p2 = Vector(0, 0)
+        p1 = self.nearest_point(other.vector1)
+        p2 = self.nearest_point(other.vector2)
         return Rectangle(p1, p2)
+
+    def nearest_point(self, other):
+        """Return the point inside self that's nearest to `other`.
+
+        The city block distance metric is used, NOT Euclidean!
+
+        """
+        y = np.clip(other.y, self.vector1.y, self.vector2.y)
+        x = np.clip(other.x, self.vector1.x, self.vector2.x)
+        return Vector(y, x)
