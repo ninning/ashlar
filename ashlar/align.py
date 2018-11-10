@@ -1,7 +1,8 @@
+import itertools
 import numbers
 import attr
 import numpy as np
-import scipy.ndimage
+import scipy.ndimage as ndimage
 import skimage.feature
 import pyfftw
 
@@ -22,9 +23,6 @@ def register_tiles(tile1, tile2):
         raise ValueError("tiles have different pixel sizes")
     shift_pixels, error = register(tile1.image, tile2.image)
     shift = geometry.Vector.from_ndarray(shift_pixels) * tile1.pixel_size
-    # TODO Resolve phase confusion by either 1) Testing direct correlation at
-    # the 4 possible shifts; or 2) Apply a windowing function before
-    # registration.
     shift_adjusted = shift + (tile1.bounds.vector1 - tile2.bounds.vector1)
     return TileAlignment(shift_adjusted, error)
 
@@ -34,23 +32,35 @@ def register(img1, img2, upsample_factor=10):
 
     This function wraps skimage registration to apply our conventions and
     enhancements. We pre-whiten the input images, use optimized FFTW FFT
-    functions, always provide fourier-space input images, and mathematically
-    transform the skimage-generated error metric in a way that makes it more
-    useful for us.
+    functions, always provide fourier-space input images, resolve the phase
+    confusion problem, and report an improved (to us) error metric.
 
     """
-    img1_f = fft2(whiten(img1))
-    img2_f = fft2(whiten(img2))
-    shift, error, _ = skimage.feature.register_translation(
+    img1w = whiten(img1)
+    img2w = whiten(img2)
+    img1_f = fft2(img1w)
+    img2_f = fft2(img2w)
+    img1w = img1w.real
+    img2w = img2w.real
+    shift, _, _ = skimage.feature.register_translation(
         img1_f, img2_f, upsample_factor, 'fourier'
     )
-    # Recover the intensity-normalized correlation magnitude by inverting the
-    # transformation applied by register_translation.
-    correlation = np.sqrt(1 - error ** 2)
-    # Log-transform and negate the correlation to produce a suitable distance
-    # metric for the Dijkstra path calculation, as well as something that
-    # produces sensible distributions for the threshold computation.
-    error = -np.log(correlation)
+    # At this point we may have a shift in the wrong quadrant since the FFT
+    # assumes the signal is periodic. We test all four possibilities and return
+    # the shift that gives the highest direct correlation (sum of products).
+    shape = np.array(img1.shape)
+    shift_pos = (shift + shape) % shape
+    shift_neg = shift_pos - shape
+    shifts = list(itertools.product(*zip(shift_pos, shift_neg)))
+    correlations = [np.sum(img1w * ndimage.shift(img2w, s)) for s in shifts]
+    idx = np.argmax(correlations)
+    shift = np.array(shifts[idx])
+    correlation = correlations[idx]
+    total_amplitude = np.linalg.norm(img1w) * np.linalg.norm(img2w)
+    if correlation > 0 and total_amplitude > 0:
+        error = -np.log(correlation / total_amplitude)
+    else:
+        error = np.inf
     return shift, error
 
 
@@ -69,12 +79,5 @@ def whiten(img):
     img = skimage.img_as_float(img)
     output = pyfftw.empty_aligned(img.shape, 'complex64')
     output.imag[:] = 0
-    scipy.ndimage.convolve(img, _laplace_kernel, output.real)
+    ndimage.convolve(img, _laplace_kernel, output.real)
     return output
-
-    # Other possible whitening functions:
-    #img = skimage.filters.roberts(img)
-    #img = skimage.filters.scharr(img)
-    #img = skimage.filters.sobel(img)
-    #img = np.log(img)
-    #img = img - scipy.ndimage.filters.gaussian_filter(img, 2) + 0.5
