@@ -64,20 +64,42 @@ class TileSet(object):
         """Return plotter utility object (see plot.TileSetPlotter)."""
         return plot.TileSetPlotter(self)
 
-    def build_neighbors_graph(self, bias=0):
+    def build_neighbors_graph(self, cutoff=50, bias=0):
         """Return graph of neighboring tiles.
 
-        Tiles are considered neighboring if their bounding rectangles overlap.
-        The `bias` parameter will expand or contract the rectangles for a more
-        or less inclusive test. By default (`bias`=0) only strictly overlapping
-        tiles are counted as neighbors.
+        Tiles are considered neighboring if the overlap area of their bounding
+        rectangles is greater than the `cutoff` percentile of all overlapping
+        tiles. The `bias` parameter will expand or contract the rectangles for a
+        more or less inclusive test.
+
+        The default `cutoff` percentile of 50 was chosen to reject diagonally
+        adjacent tiles in a regular grid. As there are slightly more up-down and
+        left-right neighbors than diagonal neighbors in a grid, the 50th
+        percentile will correspond to an up-down or left-right neighbor
+        intersection area. Very unusual tile position collections may require
+        tuning of this parameter.
+
+        The default `bias` value of 0 will only consider strictly overlapping
+        tiles. Increasing this parameter will also consider touching or even
+        disjoint tiles. The typical use case for increasing `bias` is for data
+        sets where neighboring stage positions just touch, but due to stage
+        position error the imaged regions do have some actual overlap that can
+        be registered. Specifying a small bias value will include these touching
+        neighbors in the neighbors graph.
 
         """
         recs = [r.inflate(bias) for r in self.rectangles]
         overlaps = [[r1.intersection(r2).area for r2 in recs] for r1 in recs]
-        graph = nx.from_edgelist(
-            (t1, t2) for t1, t2 in zip(*np.nonzero(overlaps)) if t1 < t2
-        )
+        mask = np.tri(len(self), k=-1)
+        overlaps = np.where(mask, overlaps, 0)
+        idxs_nonzero = np.nonzero(overlaps)
+        if len(idxs_nonzero[0]) > 0:
+            cutoff_value = np.percentile(overlaps[idxs_nonzero], cutoff)
+        else:
+            # Should we raise an exception in this case?
+            cutoff_value = np.inf
+        idxs = np.nonzero(overlaps >= cutoff_value)
+        graph = nx.from_edgelist(zip(*idxs))
         return graph
 
     def get_tile(self, tile_number, channel):
