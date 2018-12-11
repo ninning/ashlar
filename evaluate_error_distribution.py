@@ -36,7 +36,10 @@ def finite(a):
 
 errors = finite(aligner.all_errors)
 background = finite(aligner.errors_negative_sampled)
-plt.hist([errors, background], bins=40, histtype='step', range=(0, 10))
+plt.hist(
+    [errors, background], bins=40, range=(0, 10),
+    histtype='stepfilled', ec='black', alpha=0.7
+)
 plt.vlines(aligner.max_error, 0, 10)
 plt.savefig('%s-error.pdf' % name)
 plt.close()
