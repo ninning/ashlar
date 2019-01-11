@@ -2,37 +2,41 @@ from __future__ import division
 import numbers
 import attr
 import numpy as np
+from .util import attrib
 
 
 @attr.s(frozen=True)
 class Vector(object):
-    y = attr.ib(converter=float)
-    x = attr.ib(converter=float)
+    """Geometric vector in 2-D, with floating-point coordinates."""
+
+    y = attrib(converter=float, doc="Y coordinate.")
+    x = attrib(converter=float, doc="X coordinate.")
 
     @classmethod
     def from_ndarray(cls, a):
+        """Construct Vector from numpy array [Y, X]."""
         if a.shape != (2,):
             raise ValueError("array shape must be (2,)")
         return cls(*a)
 
     def __add__(self, other):
         if not isinstance(other, Vector):
-            raise NotImplementedError
+            return NotImplemented
         return Vector(self.y + other.y, self.x + other.x)
 
     def __sub__(self, other):
         if not isinstance(other, Vector):
-            raise NotImplementedError
+            return NotImplemented
         return Vector(self.y - other.y, self.x - other.x)
 
     def __mul__(self, other):
         if not isinstance(other, numbers.Number):
-            raise NotImplementedError
+            return NotImplemented
         return Vector(self.y * other, self.x * other)
 
     def __truediv__(self, other):
         if not isinstance(other, numbers.Number):
-            raise NotImplementedError
+            return NotImplemented
         return Vector(self.y / other, self.x / other)
 
     __div__ = __truediv__
@@ -43,11 +47,20 @@ class Vector(object):
 
 @attr.s(frozen=True)
 class Rectangle(object):
-    vector1 = attr.ib()
-    vector2 = attr.ib()
+    """Axis-aligned rectangle in 2-D."""
+
+    vector1 = attrib(
+        validator=attr.validators.instance_of(Vector),
+        doc="Lower-left corner."
+    )
+    vector2 = attrib(
+        validator=attr.validators.instance_of(Vector),
+        doc="Upper-right corner."
+    )
 
     @classmethod
     def from_shape(cls, vector, shape):
+        """Construct Rectangle from a Vector point and Vector shape."""
         return cls(vector, vector + shape)
 
     @classmethod
@@ -69,37 +82,40 @@ class Rectangle(object):
 
     def __add__(self, other):
         if not isinstance(other, Vector):
-            raise NotImplementedError
+            return NotImplemented
         return Rectangle(self.vector1 + other, self.vector2 + other)
 
     def __sub__(self, other):
         if not isinstance(other, Vector):
-            raise NotImplementedError
+            return NotImplemented
         return Rectangle(self.vector1 - other, self.vector2 - other)
 
     def __mul__(self, other):
         if not isinstance(other, numbers.Number):
-            raise NotImplementedError
+            return NotImplemented
         return Rectangle(self.vector1 * other, self.vector2 * other)
 
     def __truediv__(self, other):
         if not isinstance(other, numbers.Number):
-            raise NotImplementedError
+            return NotImplemented
         return Rectangle(self.vector1 / other, self.vector2 / other)
 
     __div__ = __truediv__
 
     @property
     def shape(self):
+        """A Vector created from the rectangle's width and height."""
         return self.vector2 - self.vector1
 
     @property
     def area(self):
+        """Product of rectangle's width and height."""
         s = self.shape
         return s.x * s.y
 
     @property
     def center(self):
+        """Vector at the center of the rectangle."""
         return (self.vector1 + self.vector2) / 2
 
     @property
@@ -130,7 +146,7 @@ class Rectangle(object):
         return Rectangle(v1, v2)
 
     def intersection(self, other):
-        """"Return the intersection of self and `other` as a Rectangle.
+        """Return the intersection of self and `other` as a Rectangle.
 
         If self and `other` don't overlap or merely touch, the returned
         Rectangle will always have an area of zero. Its two corners represent

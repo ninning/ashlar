@@ -5,6 +5,7 @@ import numpy as np
 import scipy.spatial.distance
 import networkx as nx
 from . import util, geometry, plot
+from .util import attrib
 
 
 @attr.s(frozen=True)
@@ -21,18 +22,27 @@ class ImageReader(util.ABC):
 
 @attr.s(frozen=True)
 class TileSet(object):
-    """Physical layout of a set of image tiles and access to the pixels.
+    """Physical layout of a list of image tiles and access to their pixels.
 
     Tile positions and shapes are always in microns, not pixels!
 
     """
-    tile_shape = attr.ib(converter=util.array_copy_immutable)
-    positions = attr.ib(converter=util.array_copy_immutable)
-    _reader = attr.ib(validator=attr.validators.instance_of(ImageReader))
+    tile_shape = attrib(
+        converter=util.array_copy_immutable,
+        doc="Array of shape (2,) with the Y, X tile dimensions in microns."
+    )
+    positions = attrib(
+        converter=util.array_copy_immutable,
+        doc="Array of shape (N, 2) with the Y, X tile positions in microns."
+    )
+    _reader = attrib(
+        validator=attr.validators.instance_of(ImageReader),
+        doc="ImageReader instance for pixel data access."
+    )
 
     @property
     def grid_shape(self):
-        """Return shape of tile grid, if tile positions do form a grid."""
+        """Shape of tile grid, if tile positions do form a grid."""
         pos = self.positions
         shape = np.array([len(set(pos[:, d])) for d in range(2)])
         if np.prod(shape) != len(self):
@@ -41,17 +51,17 @@ class TileSet(object):
 
     @property
     def centers(self):
-        """Return array of Y, X tile centers."""
+        """Array of Y, X tile centers."""
         return self.positions + self.tile_shape / 2
 
     @property
     def origin(self):
-        """Return array of minimum Y, X coordinates."""
+        """Array of minimum Y, X coordinates."""
         return geometry.Vector.from_ndarray(np.min(self.positions, axis=0))
 
     @property
     def rectangles(self):
-        """Return list of Rectangles representing tiles."""
+        """List of Rectangles representing tiles."""
         ts = geometry.Vector.from_ndarray(self.tile_shape)
         rectangles = [
             geometry.Rectangle.from_shape(geometry.Vector.from_ndarray(p), ts)
@@ -61,7 +71,7 @@ class TileSet(object):
 
     @property
     def plot(self):
-        """Return plotter utility object (see plot.TileSetPlotter)."""
+        """Plotter utility object (see plot.TileSetPlotter)."""
         return plot.TileSetPlotter(self)
 
     def build_neighbors_graph(self, cutoff=50, bias=0):
@@ -103,6 +113,7 @@ class TileSet(object):
         return graph
 
     def get_tile(self, tile_number, channel):
+        """Return Tile object for a given tile number and channel."""
         image = self._reader.read(tile_number, channel)
         bounds = self.rectangles[tile_number]
         tile = Tile(image, bounds, self._reader.pixel_size)
@@ -114,11 +125,20 @@ class TileSet(object):
 
 @attr.s(frozen=True)
 class Tile(object):
-    image = attr.ib(validator=attr.validators.instance_of(np.ndarray))
-    bounds = attr.ib(validator=attr.validators.instance_of(geometry.Rectangle))
-    pixel_size = attr.ib()
+    """A raster image and its physical dimensions and location."""
+
+    image = attrib(
+        validator=attr.validators.instance_of(np.ndarray),
+        doc="Numpy array containing the image pixels."
+    )
+    bounds = attrib(
+        validator=attr.validators.instance_of(geometry.Rectangle),
+        doc="Rectangle representing the physical dimensions of the image."
+    )
+    pixel_size = attrib(converter=float, doc="Pixel size in microns.")
 
     def intersection(self, other, min_overlap=0):
+        """Return the intersection of two Tiles as another Tile."""
         bounds = self.bounds.intersection(other.bounds)
         shape = bounds.shape
         min_width = min(shape.y, shape.x)
