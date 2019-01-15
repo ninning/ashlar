@@ -512,6 +512,8 @@ class EdgeAligner(object):
         # Set error values above the threshold to infinity.
         for k, v in self._cache.items():
             if v[1] > self.max_error or any(np.abs(v[0]) > self.max_shift_pixels):
+                if v[1] <= self.max_error:
+                    print((k, v))
                 self._cache[k] = (v[0], np.inf)
 
     def build_spanning_tree(self):
@@ -1077,7 +1079,8 @@ def whiten(img):
     img = skimage.img_as_float(img)
     output = pyfftw.empty_aligned(img.shape, 'complex64')
     output.imag[:] = 0
-    scipy.ndimage.convolve(img, _laplace_kernel, output.real)
+    #scipy.ndimage.convolve(img, _laplace_kernel, output.real)
+    output.real[:] = skimage.filters.laplace(scipy.ndimage.gaussian_filter(img,1))
     return output
 
     # Other possible whitening functions:
@@ -1118,6 +1121,18 @@ def register(img1, img2):
     else:
         error = np.inf
     return shift, error
+
+
+def correlate(img1, img2):
+    img1w = whiten(img1).real
+    img2w = whiten(img2).real
+    correlation = np.sum(img1w * img2w)
+    total_amplitude = np.linalg.norm(img1w) * np.linalg.norm(img2w)
+    if correlation > 0 and total_amplitude > 0:
+        error = -np.log(correlation / total_amplitude)
+    else:
+        error = np.inf
+    return error
 
 
 def crop(img, offset, shape):
