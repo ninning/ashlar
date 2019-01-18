@@ -21,6 +21,10 @@ class TileAlignment(object):
 def register_tiles(tile1, tile2):
     if tile1.pixel_size != tile2.pixel_size:
         raise ValueError("tiles have different pixel sizes")
+    if tile1.bounds.shape != tile2.bounds.shape:
+        raise ValueError("tiles have different shapes")
+    if tile1.bounds.area == 0:
+        raise ValueError("tiles are empty")
     shift_pixels, error = register(tile1.image, tile2.image)
     shift = geometry.Vector.from_ndarray(shift_pixels) * tile1.pixel_size
     shift_adjusted = shift + (tile1.bounds.vector1 - tile2.bounds.vector1)
