@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 import warnings
+import threading
 try:
     import pathlib
 except ImportError:
@@ -44,6 +45,7 @@ class BioformatsReader(object):
     path = attr.ib()
     bf_reader = attr.ib()
     bf_metadata = attr.ib()
+    _lock = attr.ib(init=False, factory=threading.Lock)
 
     @classmethod
     def from_path(cls, path):
@@ -156,7 +158,8 @@ class BioformatsReader(object):
 
     @property
     def format_name(self):
-        return self.bf_reader.getFormat()
+        with self._lock:
+            return self.bf_reader.getFormat()
 
     @property
     def is_metamorph_stk(self):
@@ -168,13 +171,15 @@ class BioformatsReader(object):
         return 'overview' in last_image_name.lower()
 
     def read_image(self, series, channel):
-        self.bf_reader.setSeries(series)
-        index = self.bf_reader.getIndex(0, channel, 0)
-        byte_array = self.bf_reader.openBytes(index)
-        dtype = self.pixel_dtype
-        shape = self.tile_shape
-        img = np.frombuffer(byte_array.tostring(), dtype=dtype).reshape(shape)
-        return img
+        with self._lock:
+            self.bf_reader.setSeries(series)
+            index = self.bf_reader.getIndex(0, channel, 0)
+            byte_array = self.bf_reader.openBytes(index)
+            dtype = self.pixel_dtype
+            shape = self.tile_shape
+            img = np.frombuffer(byte_array.tostring(), dtype=dtype)
+            img = img.reshape(shape)
+            return img
 
 
 @attr.s(frozen=True)
