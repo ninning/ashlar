@@ -1,4 +1,5 @@
 import abc
+import functools
 import numpy as np
 import attr
 
@@ -23,3 +24,13 @@ def attrib(doc=None, **kwargs):
         metadata = kwargs.setdefault('metadata', {})
         metadata['doc'] = doc
     return attr.ib(**kwargs)
+
+
+def cached_property(fget):
+    """Decorator for a read-only property whose value is only evaluated once."""
+    cache_attr = f"_{fget.__name__}"
+    def wrapper(self):
+        if not hasattr(self, cache_attr):
+            object.__setattr__(self, cache_attr, fget(self))
+        return getattr(self, cache_attr)
+    return property(functools.update_wrapper(wrapper, fget))

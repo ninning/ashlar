@@ -2,7 +2,7 @@ from __future__ import division
 import numbers
 import attr
 import numpy as np
-from .util import attrib
+from .util import attrib, cached_property
 
 
 @attr.s(frozen=True)
@@ -102,23 +102,23 @@ class Rectangle(object):
 
     __div__ = __truediv__
 
-    @property
+    @cached_property
     def shape(self):
         """A Vector created from the rectangle's width and height."""
         return self.vector2 - self.vector1
 
-    @property
+    @cached_property
     def area(self):
         """Product of rectangle's width and height."""
         s = self.shape
         return s.x * s.y
 
-    @property
+    @cached_property
     def center(self):
         """Vector at the center of the rectangle."""
         return (self.vector1 + self.vector2) / 2
 
-    @property
+    @cached_property
     def as_slice(self):
         """Representation of rectangle, rounded, as a numpy array slice."""
         ys = self.vector1.y, self.vector2.y

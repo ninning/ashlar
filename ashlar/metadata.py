@@ -5,7 +5,7 @@ import numpy as np
 import scipy.spatial.distance
 import networkx as nx
 from . import util, geometry, plot
-from .util import attrib
+from .util import attrib, cached_property
 
 
 @attr.s(frozen=True)
@@ -40,7 +40,7 @@ class TileSet(object):
         doc="ImageReader instance for pixel data access."
     )
 
-    @property
+    @cached_property
     def grid_shape(self):
         """Shape of tile grid, if tile positions do form a grid."""
         pos = self.positions
@@ -49,17 +49,17 @@ class TileSet(object):
             raise ValueError("Series positions do not form a grid")
         return shape
 
-    @property
+    @cached_property
     def centers(self):
         """Array of Y, X tile centers."""
         return self.positions + self.tile_shape / 2
 
-    @property
+    @cached_property
     def origin(self):
         """Array of minimum Y, X coordinates."""
         return geometry.Vector.from_ndarray(np.min(self.positions, axis=0))
 
-    @property
+    @cached_property
     def rectangles(self):
         """List of Rectangles representing tiles."""
         ts = geometry.Vector.from_ndarray(self.tile_shape)
@@ -69,7 +69,7 @@ class TileSet(object):
         ]
         return rectangles
 
-    @property
+    @cached_property
     def plot(self):
         """Plotter utility object (see plot.TileSetPlotter)."""
         return plot.TileSetPlotter(self)

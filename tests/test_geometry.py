@@ -39,3 +39,9 @@ def test_rectangle_intersection():
     assert intersect(10, 5, 10, 5) == ((10, 5), (10, 5))
     assert intersect(15, 5, 15, 5) == ((10, 5), (10, 5))
     assert intersect(15, -5, 15, -5) == ((10, 0), (10, 0))
+
+def test_rectangle_area():
+    assert rectangle(0, 0, 3.25, 5.125).area == 16.65625
+    assert rectangle(0, -7.5, -1.625, 4.375).area == 19.296875
+    assert rectangle(0, 0, 0, 0).area == 0.0
+    assert rectangle(0, 0, 1, 0).area == 0.0

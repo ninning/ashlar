@@ -8,6 +8,7 @@ except ImportError:
 import numpy as np
 import attr
 from . import metadata
+from .util import cached_property
 
 import jnius_config
 if not jnius_config.vm_running:
@@ -59,14 +60,14 @@ class BioformatsReader(object):
         bf_reader.setId(JString(str(path)))
         return cls(path, bf_reader ,bf_metadata)
 
-    @property
+    @cached_property
     def tileset(self):
         """Return a TileSet object representing this dataset."""
         return metadata.TileSet(
             self.tile_shape_microns, self.positions, self.image_reader
         )
 
-    @property
+    @cached_property
     def image_reader(self):
         """Return an ImageReader object for this dataset."""
         series_indices = range(self.num_tiles)
@@ -75,7 +76,7 @@ class BioformatsReader(object):
             series_indices
         )
 
-    @property
+    @cached_property
     def pixel_dtype(self):
         # FIXME verify all images have the same dtype.
         ome_dtype = self.bf_metadata.getPixelsType(0).value
@@ -84,7 +85,7 @@ class BioformatsReader(object):
             raise ValueError("can't handle pixel type: '{}'".format(ome_dtype))
         return dtype
 
-    @property
+    @cached_property
     def pixel_size(self):
         # FIXME verify all images have the same pixel size.
         quantities = [
@@ -100,12 +101,12 @@ class BioformatsReader(object):
             )
         return values[0]
 
-    @property
+    @cached_property
     def num_channels(self):
         # FIXME verify all images have the same number of channels.
         return self.bf_metadata.getChannelCount(0)
 
-    @property
+    @cached_property
     def tile_shape(self):
         # FIXME verify all images have the same shape.
         quantities = [
@@ -115,11 +116,11 @@ class BioformatsReader(object):
         shape = np.array([q.value for q in quantities], dtype=int)
         return shape
 
-    @property
+    @cached_property
     def tile_shape_microns(self):
         return self.tile_shape * self.pixel_size
 
-    @property
+    @cached_property
     def positions(self):
         positions = np.array([
             self.get_position(i) for i in range(self.num_tiles)
@@ -144,11 +145,11 @@ class BioformatsReader(object):
             position *= [-1, 1]
         return position
 
-    @property
+    @cached_property
     def num_images(self):
         return self.bf_metadata.imageCount
 
-    @property
+    @cached_property
     def num_tiles(self):
         num_tiles = self.num_images
         # Skip final overview slide in Metamorph Slide Scan data if present.
@@ -156,16 +157,16 @@ class BioformatsReader(object):
             num_tiles -= 1
         return num_tiles
 
-    @property
+    @cached_property
     def format_name(self):
         with self._lock:
             return self.bf_reader.getFormat()
 
-    @property
+    @cached_property
     def is_metamorph_stk(self):
         return self.format_name == 'Metamorph STK'
 
-    @property
+    @cached_property
     def has_overview_image(self):
         last_image_name = self.bf_metadata.getImageName(self.num_images - 1)
         return 'overview' in last_image_name.lower()
