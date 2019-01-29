@@ -11,11 +11,21 @@ ABC = abc.ABCMeta('ABC', (object,), {})
 def array_copy_immutable(data):
     """Return a copy of data as an immutable numpy array.
 
-    Useful as an attr.ib converter for frozen classes.
+    Useful as an attrs converter for frozen classes.
     """
     a = np.copy(data)
     a.flags.writeable = False
     return a
+
+
+def validate_range(rmin, rmax):
+    """attrs validator -- value must be in the interval [rmin, rmax]."""
+    def validate(self, attribute, value):
+        if not rmin <= value <= rmax:
+            raise ValueError(
+                f"{attribute.name} must be between {rmin} and {rmax}"
+            )
+    return validate
 
 
 def attrib(doc=None, **kwargs):

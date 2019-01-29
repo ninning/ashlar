@@ -74,28 +74,13 @@ class TileSet(object):
         """Plotter utility object (see plot.TileSetPlotter)."""
         return plot.TileSetPlotter(self)
 
-    def build_neighbors_graph(self, cutoff=50, bias=0):
+    def build_neighbors_graph(self, cutoff, bias):
         """Return graph of neighboring tiles.
 
         Tiles are considered neighboring if the overlap area of their bounding
         rectangles is greater than the `cutoff` percentile of all overlapping
         tiles. The `bias` parameter will expand or contract the rectangles for a
         more or less inclusive test.
-
-        The default `cutoff` percentile of 50 was chosen to reject diagonally
-        adjacent tiles in a regular grid. As there are slightly more up-down and
-        left-right neighbors than diagonal neighbors in a grid, the 50th
-        percentile will correspond to an up-down or left-right neighbor
-        intersection area. Very unusual tile position collections may require
-        tuning of this parameter.
-
-        The default `bias` value of 0 will only consider strictly overlapping
-        tiles. Increasing this parameter will also consider touching or even
-        disjoint tiles. The typical use case for increasing `bias` is for data
-        sets where neighboring stage positions just touch, but due to stage
-        position error the imaged regions do have some actual overlap that can
-        be registered. Specifying a small bias value will include these touching
-        neighbors in the neighbors graph.
 
         """
         recs = [r.inflate(bias) for r in self.rectangles]
