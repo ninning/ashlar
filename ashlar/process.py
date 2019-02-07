@@ -104,7 +104,7 @@ class RegistrationProcess(object):
         for a, b in self.graph.edges:
             tile_a = self.tileset.get_tile(a, self.channel_number)
             tile_b = self.tileset.get_tile(b, self.channel_number)
-            yield tile_a.intersection(tile_b), tile_b.intersection(tile_a)
+            yield a, b, tile_a.intersection(tile_b), tile_b.intersection(tile_a)
 
     def sample_neighbor_background(self):
         num_workers = len(os.sched_getaffinity(0))
@@ -118,6 +118,8 @@ class RegistrationProcess(object):
         num_workers = len(os.sched_getaffinity(0))
         with concurrent.futures.ThreadPoolExecutor(num_workers) as pool:
             def task(args):
-                return align.register_tiles(*args)
+                a, b, tile_a, tile_b = args
+                alignment = align.register_tiles(tile_a, tile_b)
+                return align.EdgeTileAlignment(alignment, a, b)
             results_iter = pool.map(task, self.neighbor_intersections())
             return list(results_iter)

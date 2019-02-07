@@ -1,12 +1,14 @@
 import itertools
 import numbers
 import attr
+import attr.validators as av
 import numpy as np
 import scipy.ndimage as ndimage
 import skimage.feature
 import pyfftw
 
 from . import geometry
+from .util import cached_property
 
 # Patch np.fft to use pyfftw so skimage utilities can benefit.
 np.fft = pyfftw.interfaces.numpy_fft
@@ -14,8 +16,30 @@ np.fft = pyfftw.interfaces.numpy_fft
 
 @attr.s
 class TileAlignment(object):
-    shift = attr.ib(validator=attr.validators.instance_of(geometry.Vector))
+    shift = attr.ib(validator=av.instance_of(geometry.Vector))
     error = attr.ib()
+
+
+@attr.s
+class EdgeTileAlignment(object):
+    alignment = attr.ib(validator=av.instance_of(TileAlignment))
+    tile_index_1 = attr.ib()
+    tile_index_2 = attr.ib()
+
+    def __attrs_post_init__(self):
+        # Normalize so that tile_index_1 < tile_index_2.
+        if self.tile_index_1 > self.tile_index_2:
+            t1 = self.tile_index_1
+            t2 = self.tile_index_2
+            new_shift = self.alignment.shift * -1
+            new_alignment = attr.evolve(self.alignment, shift=new_shift)
+            object.__setattr__(self, 'tile_index_1', t2)
+            object.__setattr__(self, 'tile_index_2', t1)
+            object.__setattr__(self, 'alignment', new_alignment)
+
+    @cached_property
+    def tile_indexes(self):
+        return (self.tile_index_1, self.tile_index_2)
 
 
 def register_tiles(tile1, tile2):
