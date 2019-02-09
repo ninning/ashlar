@@ -1,6 +1,7 @@
 from __future__ import division, print_function
 from abc import abstractmethod
 import attr
+import attr.validators as av
 import numpy as np
 import scipy.spatial.distance
 import networkx as nx
@@ -101,7 +102,8 @@ class TileSet(object):
         """Return Tile object for a given tile number and channel."""
         image = self._reader.read(tile_number, channel)
         bounds = self.rectangles[tile_number]
-        tile = Tile(image, bounds, self._reader.pixel_size)
+        plane = Plane(image, bounds, self._reader.pixel_size)
+        tile = Tile(plane, tile_number, channel)
         return tile
 
     def __len__(self):
@@ -109,7 +111,7 @@ class TileSet(object):
 
 
 @attr.s(frozen=True)
-class Tile(object):
+class Plane(object):
     """A raster image and its physical dimensions and location."""
 
     image = attrib(
@@ -123,7 +125,9 @@ class Tile(object):
     pixel_size = attrib(converter=float, doc="Pixel size in microns.")
 
     def intersection(self, other, min_overlap=0):
-        """Return the intersection of two Tiles as another Tile."""
+        """Return the intersection of two Planes as another Plane."""
+        if self.pixel_size != other.pixel_size:
+            raise ValueError("Planes have different pixel sizes")
         bounds = self.bounds.intersection(other.bounds)
         shape = bounds.shape
         min_width = min(shape.y, shape.x)
@@ -132,4 +136,22 @@ class Tile(object):
             bounds = self.bounds.intersection(bounds.inflate(padding))
         crop_region = (bounds - self.bounds.vector1) / self.pixel_size
         image = self.image[crop_region.as_slice]
-        return Tile(image, bounds, self.pixel_size)
+        return Plane(image, bounds, self.pixel_size)
+
+
+@attr.s(frozen=True)
+class Tile(object):
+    """A Plane taken from a specific series and channel in a collection."""
+
+    plane = attrib(
+        validator=av.instance_of(Plane),
+        doc="Plane holding the image and physical position."
+    )
+    index = attrib(
+        validator=av.instance_of(int),
+        doc="Index of the tile within its collection."
+    )
+    channel = attrib(
+        validator=av.instance_of(int),
+        doc="Index of the image channel this tile represents."
+    )
