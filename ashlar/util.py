@@ -1,5 +1,6 @@
 import abc
 import functools
+import concurrent.futures
 import numpy as np
 import attr
 
@@ -44,3 +45,30 @@ def cached_property(fget):
             object.__setattr__(self, cache_attr, fget(self))
         return getattr(self, cache_attr)
     return property(functools.update_wrapper(wrapper, fget))
+
+
+def executor_submit(executor, fn, task_args):
+    """Submit tasks to a concurrent.futures.Executor, returning Futures.
+
+    All tasks use the same callable `fn`. The *args for each execution of `fn`
+    are taken from the iterable `task_args`.
+
+    """
+    return [executor.submit(fn, *args) for args in task_args]
+
+
+def future_results(futures):
+    """Return results for a list of futures."""
+    return [f.result() for f in futures]
+
+
+def future_progress(futures, batch_size=1):
+    """Return results for a list of futures, with progress reporting."""
+    n = len(futures)
+    results = []
+    for i, f in enumerate(concurrent.futures.as_completed(futures), 1):
+        if i % batch_size == 0 or i == n:
+            print(f"\r{i}/{n}", end="", flush=True)
+        results.append(f.result())
+    print()
+    return results

@@ -9,6 +9,7 @@ import numpy as np
 import attr
 from . import metadata
 from .util import cached_property
+import time
 
 import jnius_config
 if not jnius_config.vm_running:
@@ -22,13 +23,16 @@ import jnius
 
 
 JString = jnius.autoclass('java.lang.String')
+File = jnius.autoclass('java.io.File')
 DebugTools = jnius.autoclass('loci.common.DebugTools')
 IFormatReader = jnius.autoclass('loci.formats.IFormatReader')
+Memoizer = jnius.autoclass('loci.formats.Memoizer')
 MetadataStore = jnius.autoclass('loci.formats.meta.MetadataStore')
 ServiceFactory = jnius.autoclass('loci.common.services.ServiceFactory')
 OMEXMLService = jnius.autoclass('loci.formats.services.OMEXMLService')
 ChannelSeparator = jnius.autoclass('loci.formats.ChannelSeparator')
 UNITS = jnius.autoclass('ome.units.UNITS')
+
 
 # Work around pyjnius #300. Passing a python string directly here corrupts the
 # value under Python 3, but explicitly converting it into a Java string works.
@@ -46,19 +50,47 @@ class BioformatsReader(object):
     path = attr.ib()
     bf_reader = attr.ib()
     bf_metadata = attr.ib()
+    cache_directory = attr.ib(default=None)
+    _thread_local = attr.ib(init=False, factory=threading.local)
     _lock = attr.ib(init=False, factory=threading.Lock)
 
     @classmethod
-    def from_path(cls, path):
+    def from_path(cls, path, cache_directory=None):
         """Return a new BioformatsReader given a path to a file."""
         factory = ServiceFactory()
         service = jnius.cast(OMEXMLService, factory.getInstance(OMEXMLService))
         bf_metadata = service.createOMEXMLMetadata()
-        bf_reader = ChannelSeparator()
+        bf_reader = cls.get_bf_reader(cache_directory)
         bf_reader.setMetadataStore(bf_metadata)
         # FIXME Workaround for pyjnius #300.
         bf_reader.setId(JString(str(path)))
-        return cls(path, bf_reader ,bf_metadata)
+        return cls(path, bf_reader, bf_metadata, cache_directory)
+
+    @classmethod
+    def get_bf_reader(cls, cache_directory):
+        """Return a new ChannelSeparator, with optional caching."""
+        if cache_directory is None:
+            bf_reader = ChannelSeparator()
+        else:
+            memo_dir = File(JString(str(cache_directory)))
+            bf_reader = Memoizer(ChannelSeparator(), 0, memo_dir)
+        return bf_reader
+
+    @property
+    def local_bf_reader(self):
+        """Return thread-local clone of bf_reader.
+
+        Setting self.cache_directory can dramatically speed up the
+        initialization of the thread-local readers.
+
+        """
+        try:
+            bf_reader = self._thread_local.bf_reader
+        except AttributeError:
+            bf_reader = self.get_bf_reader(self.cache_directory)
+            self._thread_local.bf_reader = bf_reader
+            bf_reader.setId(JString(str(self.path)))
+        return bf_reader
 
     @cached_property
     def tileset(self):
@@ -172,15 +204,15 @@ class BioformatsReader(object):
         return 'overview' in last_image_name.lower()
 
     def read_image(self, series, channel):
-        with self._lock:
-            self.bf_reader.setSeries(series)
-            index = self.bf_reader.getIndex(0, channel, 0)
-            byte_array = self.bf_reader.openBytes(index)
-            dtype = self.pixel_dtype
-            shape = self.tile_shape
-            img = np.frombuffer(byte_array.tostring(), dtype=dtype)
-            img = img.reshape(shape)
-            return img
+        bf_reader = self.local_bf_reader
+        bf_reader.setSeries(series)
+        index = bf_reader.getIndex(0, channel, 0)
+        byte_array = bf_reader.openBytes(index)
+        dtype = self.pixel_dtype
+        shape = self.tile_shape
+        img = np.frombuffer(byte_array.tostring(), dtype=dtype)
+        img = img.reshape(shape)
+        return img
 
 
 @attr.s(frozen=True)

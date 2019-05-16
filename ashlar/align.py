@@ -1,28 +1,26 @@
 import itertools
 import numbers
+import threading
 import attr
 import attr.validators as av
 import numpy as np
 import scipy.ndimage as ndimage
 import skimage.feature
-import pyfftw
+import skimage.filters
 
 from . import geometry
 from .util import cached_property
 
-# Patch np.fft to use pyfftw so skimage utilities can benefit.
-np.fft = pyfftw.interfaces.numpy_fft
-
 
 @attr.s
-class TileAlignment(object):
+class PlaneAlignment(object):
     shift = attr.ib(validator=av.instance_of(geometry.Vector))
     error = attr.ib()
 
 
 @attr.s
 class EdgeTileAlignment(object):
-    alignment = attr.ib(validator=av.instance_of(TileAlignment))
+    alignment = attr.ib(validator=av.instance_of(PlaneAlignment))
     tile_index_1 = attr.ib()
     tile_index_2 = attr.ib()
 
@@ -42,32 +40,32 @@ class EdgeTileAlignment(object):
         return (self.tile_index_1, self.tile_index_2)
 
 
-def register_tiles(tile1, tile2):
-    if tile1.pixel_size != tile2.pixel_size:
-        raise ValueError("tiles have different pixel sizes")
-    if tile1.bounds.shape != tile2.bounds.shape:
-        raise ValueError("tiles have different shapes")
-    if tile1.bounds.area == 0:
-        raise ValueError("tiles are empty")
-    shift_pixels, error = register(tile1.image, tile2.image)
-    shift = geometry.Vector.from_ndarray(shift_pixels) * tile1.pixel_size
-    shift_adjusted = shift + (tile1.bounds.vector1 - tile2.bounds.vector1)
-    return TileAlignment(shift_adjusted, error)
+def register_planes(plane1, plane2):
+    if plane1.pixel_size != plane2.pixel_size:
+        raise ValueError("planes have different pixel sizes")
+    if plane1.bounds.shape != plane2.bounds.shape:
+        raise ValueError("planes have different shapes")
+    if plane1.bounds.area == 0:
+        raise ValueError("planes are empty")
+    shift_pixels, error = register(plane1.image, plane2.image)
+    shift = geometry.Vector.from_ndarray(shift_pixels) * plane1.pixel_size
+    shift_adjusted = shift + (plane1.bounds.vector1 - plane2.bounds.vector1)
+    return PlaneAlignment(shift_adjusted, error)
 
 
 def register(img1, img2, upsample_factor=10):
     """Return translation shift from img2 to img2 and an error metric.
 
     This function wraps skimage registration to apply our conventions and
-    enhancements. We pre-whiten the input images, use optimized FFTW FFT
-    functions, always provide fourier-space input images, resolve the phase
-    confusion problem, and report an improved (to us) error metric.
+    enhancements. We pre-whiten the input images, always provide fourier-space
+    input images, resolve the phase confusion problem, and report an improved
+    (to us) error metric.
 
     """
     img1w = whiten(img1)
     img2w = whiten(img2)
-    img1_f = fft2(img1w)
-    img2_f = fft2(img2w)
+    img1_f = np.fft.fft2(img1w)
+    img2_f = np.fft.fft2(img2w)
     img1w = img1w.real
     img2w = img2w.real
     shift, _, _ = skimage.feature.register_translation(
@@ -92,20 +90,16 @@ def register(img1, img2, upsample_factor=10):
     return shift, error
 
 
-def fft2(img):
-    return pyfftw.builders.fft2(img, planner_effort='FFTW_ESTIMATE',
-                                avoid_copy=True, auto_align_input=True,
-                                auto_contiguous=True)()
-
-
-# Pre-calculate the Laplacian operator kernel. We'll always be using 2D images.
-_laplace_kernel = skimage.restoration.uft.laplacian(2, (3, 3))[1]
-
 def whiten(img):
-    # Copied from skimage.filters.edges, with explicit aligned output from
-    # convolve. Also the mask option was dropped.
+    """Return a lightly smoothed and spectrally whitened copy of an image.
+
+    Uses Laplacian of Gaussian with a sigma of 1. Returns a complex64 output
+    with the whitened image in the real component and zero in the imaginary
+    component.
+
+    """
+    output = np.empty_like(img, dtype=np.complex64)
     img = skimage.img_as_float(img)
-    output = pyfftw.empty_aligned(img.shape, 'complex64')
+    ndimage.filters.gaussian_laplace(img, sigma=1.0, output=output.real)
     output.imag[:] = 0
-    ndimage.convolve(img, _laplace_kernel, output.real)
     return output

@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 from abc import abstractmethod
+import numbers
 import attr
 import attr.validators as av
 import numpy as np
@@ -148,10 +149,10 @@ class Tile(object):
         doc="Plane holding the image and physical position."
     )
     index = attrib(
-        validator=av.instance_of(int),
+        validator=av.instance_of(numbers.Integral),
         doc="Index of the tile within its collection."
     )
     channel = attrib(
-        validator=av.instance_of(int),
+        validator=av.instance_of(numbers.Integral),
         doc="Index of the image channel this tile represents."
     )

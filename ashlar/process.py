@@ -4,7 +4,7 @@ import concurrent.futures
 import attr
 import attr.validators as av
 import numpy as np
-from . import metadata, util, align
+from . import metadata, geometry, util, align, plot
 from .util import attrib, cached_property
 
 
@@ -80,6 +80,11 @@ class RegistrationProcess(object):
             self.neighbor_overlap_cutoff, self.neighbor_overlap_bias
         )
 
+    @cached_property
+    def plot(self):
+        """Plotter utility object (see plot.RegistrationProcessPlotter)."""
+        return plot.RegistrationProcessPlotter(self)
+
     def random_tile_pair_index(self):
         return self.random_state.randint(len(self.tileset), size=2)
 
@@ -87,7 +92,10 @@ class RegistrationProcess(object):
         neighbors = list(self.graph.neighbors(i))
         return self.random_state.choice(neighbors)
 
-    def neighbor_permutations(self):
+    def get_tile(self, i):
+        return self.tileset.get_tile(i, self.channel_number)
+
+    def neighbor_permutation_tasks(self):
         for i in range(self.num_permutations):
             while True:
                 a, b = self.random_tile_pair_index()
@@ -95,31 +103,24 @@ class RegistrationProcess(object):
                     break
             a_neighbor = self.tile_random_neighbor_index(a)
             new_b_bounds = self.tileset.rectangles[a_neighbor]
-            tile_a = self.tileset.get_tile(a, self.channel_number)
-            tile_b = self.tileset.get_tile(b, self.channel_number)
-            tile_b = attr.evolve(tile_b, bounds=new_b_bounds)
-            yield tile_a.intersection(tile_b), tile_b.intersection(tile_a)
+            yield a, b, new_b_bounds
 
-    def neighbor_intersections(self):
-        for a, b in self.graph.edges:
-            tile_a = self.tileset.get_tile(a, self.channel_number)
-            tile_b = self.tileset.get_tile(b, self.channel_number)
-            yield a, b, tile_a.intersection(tile_b), tile_b.intersection(tile_a)
+    def compute_neighbor_permutation(self, a, b, new_b_bounds):
+        plane1 = self.get_tile(a).plane
+        plane2 = self.get_tile(b).plane
+        plane2 = attr.evolve(plane2, bounds=new_b_bounds)
+        intersection1 = plane1.intersection(plane2)
+        intersection2 = plane2.intersection(plane1)
+        alignment = align.register_planes(intersection1, intersection2)
+        return alignment.error
 
-    def sample_neighbor_background(self):
-        num_workers = len(os.sched_getaffinity(0))
-        with concurrent.futures.ThreadPoolExecutor(num_workers) as pool:
-            def task(args):
-                return align.register_tiles(*args)
-            results_iter = pool.map(task, self.neighbor_permutations())
-            return [a.error for a in results_iter]
+    def neighbor_intersection_tasks(self):
+        return self.graph.edges
 
-    def align_neighbors(self):
-        num_workers = len(os.sched_getaffinity(0))
-        with concurrent.futures.ThreadPoolExecutor(num_workers) as pool:
-            def task(args):
-                a, b, tile_a, tile_b = args
-                alignment = align.register_tiles(tile_a, tile_b)
-                return align.EdgeTileAlignment(alignment, a, b)
-            results_iter = pool.map(task, self.neighbor_intersections())
-            return list(results_iter)
+    def compute_neighbor_intersection(self, a, b):
+        plane1 = self.get_tile(a).plane
+        plane2 = self.get_tile(b).plane
+        intersection1 = plane1.intersection(plane2)
+        intersection2 = plane2.intersection(plane1)
+        alignment = align.register_planes(intersection1, intersection2)
+        return align.EdgeTileAlignment(alignment, a, b)

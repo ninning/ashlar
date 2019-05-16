@@ -19,7 +19,7 @@ class TileSetPlotter(object):
     Call one of the plot methods explicitly, or call the plotter itself for
     the default plot, `scatter`.
     """
-    geometry = attr.ib()
+    tileset = attr.ib()
 
     def __call__(self, **kwargs):
         self.scatter(**kwargs)
@@ -28,33 +28,38 @@ class TileSetPlotter(object):
         """Create a scatter plot of the tile positions."""
         if ax is None:
             ax = plt.gca()
-        y, x = self.geometry.positions.T
+        y, x = self.tileset.positions.T
         ax.scatter(x, y, **kwargs)
         ax.set_aspect('equal')
 
-    def neighbors_graph(self, ax=None, **kwargs):
+    def rectangles(self, ax=None, **kwargs):
+        """Draw a rectangle representing each tile's position and size."""
+        for r in self.tileset.rectangles:
+            draw_rectangle(r, ax, **kwargs)
+
+
+@attr.s(frozen=True)
+class RegistrationProcessPlotter(object):
+    """RegistrationProcess plotting helper"""
+
+    process = attr.ib()
+
+    def __call__(self, **kwargs):
+        self.graph(**kwargs)
+
+    def graph(self, ax=None, **kwargs):
         """Draw the neighbors graph using the tile centers for layout."""
         defaults = dict(
             font_size=6, node_size=100, node_color='orange'
         )
         for k, v in defaults.items():
             kwargs.setdefault(k, v)
-        ng_kwargs = {}
-        try:
-            ng_kwargs['bias'] = kwargs.pop('bias')
-        except KeyError:
-            pass
-        g = self.geometry.build_neighbors_graph(**ng_kwargs)
-        pos = np.fliplr(self.geometry.centers)
+        g = self.process.graph
+        pos = np.fliplr(self.process.tileset.centers)
         if ax is None:
             ax = plt.gca()
         nx.draw_networkx(g, ax=ax, pos=pos, with_labels=True, **kwargs)
         ax.set_aspect('equal')
-
-    def rectangles(self, ax=None, **kwargs):
-        """Draw a rectangle representing each tile's position and size."""
-        for r in self.geometry.rectangles:
-            draw_rectangle(r, ax, **kwargs)
 
 
 def draw_rectangle(rect, ax=None, **kwargs):

@@ -2,9 +2,9 @@ import inspect
 import itertools
 import attr
 
-from ashlar.metadata import Tile, TileSet, ImageReader
+from ashlar.metadata import Plane, Tile, TileSet, ImageReader
 from ashlar.geometry import Vector, Rectangle
-from ashlar.align import TileAlignment
+from ashlar.align import PlaneAlignment, EdgeTileAlignment
 from ashlar.plot import TileSetPlotter
 #from ashlar.bioformats import BioformatsReader
 
@@ -15,8 +15,8 @@ kind_order = {
 }
 
 classes = [
-    Vector, Rectangle, Tile, TileSet, ImageReader, TileAlignment,
-    TileSetPlotter,
+    Vector, Rectangle, Plane, Tile, TileSet, ImageReader, PlaneAlignment,
+    EdgeTileAlignment, TileSetPlotter,
     #BioformatsReader
 ]
 
