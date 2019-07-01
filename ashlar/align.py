@@ -90,16 +90,16 @@ def register(img1, img2, upsample_factor=10):
     return shift, error
 
 
-def whiten(img):
-    """Return a lightly smoothed and spectrally whitened copy of an image.
+def whiten(img, sigma=0.0):
+    """Return a spectrally whitened copy of an image with optional smoothing.
 
-    Uses Laplacian of Gaussian with a sigma of 1. Returns a complex64 output
+    Uses Laplacian of Gaussian with the given sigma. Returns a complex64 output
     with the whitened image in the real component and zero in the imaginary
-    component.
+    component. (This allows the result to be used directly in FFT operations)
 
     """
     output = np.empty_like(img, dtype=np.complex64)
     img = skimage.img_as_float(img)
-    ndimage.filters.gaussian_laplace(img, sigma=1.0, output=output.real)
+    ndimage.filters.gaussian_laplace(img, sigma=sigma, output=output.real)
     output.imag[:] = 0
     return output
