@@ -50,6 +50,10 @@ class RegistrationProcess(object):
         default=0, converter=float,
         doc="Distance to expand/contract tile bounds before neighbor testing."
     )
+    overlap_minimum_size = attrib(
+        default=0, converter=float,
+        doc="Neighbor overlap windows will be expanded to at least this size."
+    )
     num_permutations = attrib(
         default=1000, converter=int,
         doc="Number of permutations used to sample the error distribution."
@@ -109,8 +113,8 @@ class RegistrationProcess(object):
         plane1 = self.get_tile(a).plane
         plane2 = self.get_tile(b).plane
         plane2 = attr.evolve(plane2, bounds=new_b_bounds)
-        intersection1 = plane1.intersection(plane2)
-        intersection2 = plane2.intersection(plane1)
+        intersection1 = plane1.intersection(plane2, self.overlap_minimum_size)
+        intersection2 = plane2.intersection(plane1, self.overlap_minimum_size)
         alignment = align.register_planes(intersection1, intersection2)
         return alignment.error
 
@@ -120,7 +124,7 @@ class RegistrationProcess(object):
     def compute_neighbor_intersection(self, a, b):
         plane1 = self.get_tile(a).plane
         plane2 = self.get_tile(b).plane
-        intersection1 = plane1.intersection(plane2)
-        intersection2 = plane2.intersection(plane1)
+        intersection1 = plane1.intersection(plane2, self.overlap_minimum_size)
+        intersection2 = plane2.intersection(plane1, self.overlap_minimum_size)
         alignment = align.register_planes(intersection1, intersection2)
         return align.EdgeTileAlignment(alignment, a, b)
