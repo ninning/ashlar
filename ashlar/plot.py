@@ -76,3 +76,16 @@ def draw_rectangle(rect, ax=None, **kwargs):
     ax.autoscale_view()
     ax.set_aspect('equal')
     return mrect
+
+
+def draw_plane(plane, ax=None, **kwargs):
+    defaults = dict(cmap='Greens')
+    for k, v in defaults.items():
+        kwargs.setdefault(k, v)
+    v1 = plane.bounds.vector1
+    v2 = plane.bounds.vector2
+    extent = (v1.x, v2.x, v2.y, v1.y)
+    if ax is None:
+        ax = plt.gca()
+    image = ax.imshow(plane.image, extent=extent, **kwargs)
+    return image
