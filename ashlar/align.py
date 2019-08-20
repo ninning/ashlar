@@ -29,7 +29,7 @@ class EdgeTileAlignment(object):
         if self.tile_index_1 > self.tile_index_2:
             t1 = self.tile_index_1
             t2 = self.tile_index_2
-            new_shift = self.alignment.shift * -1
+            new_shift = -self.alignment.shift
             new_alignment = attr.evolve(self.alignment, shift=new_shift)
             object.__setattr__(self, 'tile_index_1', t2)
             object.__setattr__(self, 'tile_index_2', t1)
@@ -38,6 +38,15 @@ class EdgeTileAlignment(object):
     @cached_property
     def tile_indexes(self):
         return (self.tile_index_1, self.tile_index_2)
+
+    def get_shift(self, index):
+        """Return the shift from the "perspective" of tile `index`."""
+        if index == self.tile_index_1:
+            return -self.alignment.shift
+        elif index == self.tile_index_2:
+            return self.alignment.shift
+        else:
+            raise ValueError("Invalid tile index")
 
 
 def register_planes(plane1, plane2):

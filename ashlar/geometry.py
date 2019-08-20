@@ -41,6 +41,9 @@ class Vector(object):
 
     __div__ = __truediv__
 
+    def __neg__(self):
+        return Vector(-self.y, -self.x)
+
     def __array__(self):
         return np.array([self.y, self.x])
 
